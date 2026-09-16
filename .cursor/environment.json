@@ -1,0 +1,10 @@
+{
+  "name": "Cursor Starter (Vite + React + TS)",
+  "install": "npm ci",
+  "terminals": [
+    {
+      "name": "dev-server",
+      "command": "npm run dev"
+    }
+  ]
+}
