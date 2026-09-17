@@ -20,6 +20,7 @@ import type {
 import { AVATAR_COLORS, AVATAR_SHAPES } from "@/lib/types";
 import { BOT_TEMPLATES } from "@/lib/catalog";
 import { presenceStatus, statusLabel } from "@/lib/status";
+import { InstallCrew } from "./Pwa";
 
 type Bootstrap = {
   user: { id: string; email: string; name: string; appearance: string };
@@ -919,6 +920,8 @@ function Settings({
   const [pattern, setPattern] = useState("send_email");
   return (
     <div className="settings">
+      <h3>Laptop-app</h3>
+      <InstallCrew variant="settings" />
       <h3>Weergave</h3>
       <div className="row">
         <button className={theme === "dark" ? "on" : ""} onClick={() => onTheme("dark")}>

@@ -196,6 +196,37 @@ button { cursor: pointer; }
 .auth-card h1 { margin: 8px 0 4px; letter-spacing: -0.04em; }
 .auth-card form { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
 
+.install-card {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-3);
+}
+.install-card strong { display: block; margin-bottom: 4px; }
+.install-card .row { margin-top: 10px; align-items: center; }
+.install-card .send { width: auto; height: 40px; padding: 0 14px; }
+.install-card a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
+.install-steps {
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.install-steps strong { display: inline; color: var(--text); }
+.install-card code { font-size: 12px; background: var(--bg); padding: 1px 6px; border-radius: 6px; }
+@media (display-mode: standalone), (display-mode: window-controls-overlay) {
+  .install-card.banner { display: none; }
+}
+@media (display-mode: window-controls-overlay) {
+  .roster-head, .ios-home-head, .chat-head {
+    padding-top: max(14px, env(titlebar-area-height, 14px));
+  }
+}
+
 .crew-avatar {
   position: relative;
   display: inline-grid;

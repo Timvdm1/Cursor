@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { InstallCrew } from "@/components/Pwa";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -49,6 +50,7 @@ export default function LoginPage() {
             {mode === "login" ? "Nieuw account" : "Ik heb al een account"}
           </button>
         </p>
+        <InstallCrew variant="banner" />
       </div>
     </div>
   );
