@@ -279,7 +279,6 @@ function ComputerSettings({
       <Section title="Agent Computer">
         <div className="settings-row">
           <div>
-            <strong>{computer.title}</strong>
             <p className="muted">{computer.status}</p>
             <p className="muted">{computer.url}</p>
           </div>

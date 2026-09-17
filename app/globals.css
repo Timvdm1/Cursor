@@ -80,7 +80,14 @@ button { cursor: pointer; }
 .roster-row em { font-style: normal; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dot { width: 8px; height: 8px; border-radius: 99px; background: var(--accent); margin-left: auto; }
 .dot.needs { background: #fbbf24; }
-.roster-foot { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); flex-wrap: wrap; align-items: center; }
+.roster-foot {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  align-items: center;
+}
 .roster-foot button, .ghost, .composer .icon, .tabs button, .market-row button, .row button, .stack-form button, .card button, .comp-tools button {
   background: var(--bg-3);
   border: 1px solid var(--line);
@@ -299,12 +306,14 @@ button { cursor: pointer; }
 }
 .tool-toggles { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 8px; }
 .yours-plugin { align-items: flex-start; }
-.account-menu { position: relative; margin-left: auto; }
+.account-menu { position: relative; grid-column: 1 / -1; margin-left: 0; }
 .account-chip {
   display: flex !important;
   align-items: center;
   gap: 8px;
-  max-width: 140px;
+  max-width: none;
+  width: 100%;
+  justify-content: flex-start;
 }
 .account-dot {
   width: 8px;
