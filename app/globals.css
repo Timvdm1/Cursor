@@ -205,7 +205,10 @@ button { cursor: pointer; }
 }
 .install-card strong { display: block; margin-bottom: 4px; }
 .install-card .row { margin-top: 10px; align-items: center; }
-.install-card .send { width: auto; height: 40px; padding: 0 14px; }
+.install-card .send {
+  width: auto; height: 40px; padding: 0 14px;
+  background: var(--accent); color: #06281c; border: 0; font-weight: 700;
+}
 .install-card a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
 .install-steps {
   padding-left: 18px;
