@@ -38,9 +38,11 @@ export async function POST(req: Request) {
     convo.lastPreview = content.slice(0, 80);
     convo.attention = "none";
 
-    const events = await runTurn({ state, conversationId: convo.id, userText: content, hopCount: 0 });
     const primaryBot = state.bots.find((b) => convo.botIds.includes(b.id));
     const sender = primaryBot?.id || convo.botIds[0];
+    convo.workingBotId = sender;
+
+    const events = await runTurn({ state, conversationId: convo.id, userText: content, hopCount: 0 });
 
     const model = resolveModel(state, primaryBot?.model);
     if (model.apiKey && model.model !== "crew-local") {
@@ -142,6 +144,12 @@ export async function POST(req: Request) {
     if (last) {
       convo.lastPreview = last.content.slice(0, 80);
       convo.lastMessageAt = last.createdAt;
+    }
+
+    if (convo.attention === "needs") {
+      convo.workingBotId = undefined;
+    } else if (!state.computer.active) {
+      convo.workingBotId = undefined;
     }
 
     const queued = state.handoffs.filter((h) => h.status === "queued" && h.conversationId === convo.id);

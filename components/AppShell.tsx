@@ -5,7 +5,9 @@ import { Avatar } from "./Avatar";
 import type {
   Approval,
   AutoReviewRule,
+  AvatarShape,
   Bot,
+  BotStatus,
   ComputerState,
   Conversation,
   Message,
@@ -15,8 +17,9 @@ import type {
   Skill,
   WorkspaceFile,
 } from "@/lib/types";
+import { AVATAR_COLORS, AVATAR_SHAPES } from "@/lib/types";
 import { BOT_TEMPLATES } from "@/lib/catalog";
-import { statusLabel } from "@/lib/status";
+import { presenceStatus, statusLabel } from "@/lib/status";
 
 type Bootstrap = {
   user: { id: string; email: string; name: string; appearance: string };
@@ -64,18 +67,39 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [mobileScreen, setMobileScreen] = useState<"home" | "chat">("home");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [live, setLive] = useState<{ convoId: string; botId: string; status: BotStatus; action: string } | null>(null);
+  const [pending, setPending] = useState<Message | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const liveTimer = useRef<number | null>(null);
 
   const convo = data.conversations.find((c) => c.id === activeId) || data.conversations[0];
   const messages = useMemo(
     () => data.messages.filter((m) => m.conversationId === convo?.id),
     [data.messages, convo?.id],
   );
-  const working = Boolean(convo?.workingBotId) || data.computer.active;
+
+  function presenceOf(c: Conversation | undefined, botId?: string): BotStatus {
+    if (!c) return "idle";
+    return presenceStatus({
+      live: live && live.convoId === c.id && (!botId || live.botId === botId) ? live.status : undefined,
+      workingBotId: c.workingBotId,
+      botId,
+      attention: c.attention,
+    });
+  }
+
+  const presence = presenceOf(convo);
+  const working = presence === "thinking" || presence === "working" || data.computer.active;
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length, busy]);
+  }, [messages.length, busy, pending]);
+
+  useEffect(() => {
+    return () => {
+      if (liveTimer.current) window.clearTimeout(liveTimer.current);
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -92,23 +116,63 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
   async function reload() {
     const next = await j<Bootstrap>("/api/bootstrap");
     setData(next);
+    return next;
   }
 
   async function send(text = draft) {
     if (!convo || !text.trim() || busy) return;
+    const botId = convo.botIds[0];
+    const content = text.trim();
     setBusy(true);
     setError(null);
     setDraft("");
     setMentionOpen(false);
     setSlashOpen(false);
+    setPending({
+      id: "pending_" + Date.now(),
+      conversationId: convo.id,
+      role: "user",
+      kind: "text",
+      content,
+      createdAt: new Date().toISOString(),
+    });
+    setLive({ convoId: convo.id, botId, status: "thinking", action: "Leest je bericht" });
+    if (liveTimer.current) window.clearTimeout(liveTimer.current);
+    liveTimer.current = window.setTimeout(() => {
+      setLive((cur) =>
+        cur && cur.convoId === convo.id && cur.status === "thinking"
+          ? { ...cur, status: "working", action: "Aan het werk" }
+          : cur,
+      );
+    }, 420);
     try {
       await j("/api/chat", {
         method: "POST",
-        body: JSON.stringify({ conversationId: convo.id, content: text }),
+        body: JSON.stringify({ conversationId: convo.id, content }),
       });
-      await reload();
+      const next = await reload();
+      setPending(null);
+      const nextConvo = next.conversations.find((c) => c.id === convo.id);
+      if (nextConvo?.attention === "needs") {
+        setLive({ convoId: convo.id, botId, status: "blocked", action: "Hulp nodig" });
+      } else if (next.computer.active) {
+        setLive({
+          convoId: convo.id,
+          botId,
+          status: "working",
+          action: next.computer.status || "Computer",
+        });
+      } else {
+        setLive({ convoId: convo.id, botId, status: "done", action: "Klaar" });
+        liveTimer.current = window.setTimeout(() => {
+          setLive((cur) => (cur && cur.status === "done" ? null : cur));
+        }, 700);
+      }
     } catch (err) {
       setError((err as Error).message);
+      setDraft(content);
+      setPending(null);
+      setLive({ convoId: convo.id, botId, status: "blocked", action: "Mislukt" });
     } finally {
       setBusy(false);
     }
@@ -203,7 +267,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
         <div className="roster-list">
           {data.conversations.map((c) => {
             const bot = data.bots.find((b) => b.id === c.botIds[0]);
-            const status = c.workingBotId ? "working" : c.attention === "needs" ? "blocked" : c.attention === "unread" ? "waiting" : "idle";
+            const status = presenceOf(c);
             return (
               <button
                 key={c.id}
@@ -214,7 +278,9 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
                   <span className="stack">
                     {c.botIds.slice(0, 3).map((id) => {
                       const b = data.bots.find((x) => x.id === id);
-                      return b ? <Avatar key={id} color={b.color} shape={b.shape} size={18} status="idle" /> : null;
+                      return b ? (
+                        <Avatar key={id} color={b.color} shape={b.shape} size={18} status={presenceOf(c, id)} />
+                      ) : null;
                     })}
                   </span>
                 ) : bot ? (
@@ -249,18 +315,21 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
                 color={data.bots.find((b) => b.id === convo?.botIds[0])!.color}
                 shape={data.bots.find((b) => b.id === convo?.botIds[0])!.shape}
                 size={28}
-                status={working ? "working" : "idle"}
+                status={presence}
+                title={live?.convoId === convo?.id ? live.action : statusLabel(presence)}
               />
             )}
             <div>
               <h1>{convo?.title}</h1>
               <p>
-                {convo?.kind === "group"
-                  ? convo.botIds
-                      .map((id) => data.bots.find((b) => b.id === id)?.name)
-                      .filter(Boolean)
-                      .join(" · ")
-                  : data.bots.find((b) => b.id === convo?.botIds[0])?.title}
+                {presence !== "idle"
+                  ? statusLabel(presence)
+                  : convo?.kind === "group"
+                    ? convo.botIds
+                        .map((id) => data.bots.find((b) => b.id === id)?.name)
+                        .filter(Boolean)
+                        .join(" · ")
+                    : data.bots.find((b) => b.id === convo?.botIds[0])?.title}
               </p>
             </div>
           </div>
@@ -325,6 +394,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
               message={m}
               bots={data.bots}
               approvals={data.approvals}
+              status={m.senderBotId ? presenceOf(convo, m.senderBotId) : "idle"}
               onApprove={async (id, decision) => {
                 await j("/api/approvals", { method: "POST", body: JSON.stringify({ id, decision }) });
                 await reload();
@@ -335,7 +405,33 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
               }}
             />
           ))}
-          {busy && <div className="trace">Bezig…</div>}
+          {pending && pending.conversationId === convo?.id && (
+            <MessageView
+              message={pending}
+              bots={data.bots}
+              approvals={data.approvals}
+              status="idle"
+              onApprove={() => undefined}
+              onReact={() => undefined}
+            />
+          )}
+          {busy && convo && (
+            <article className="msg typing-row">
+              {data.bots.find((b) => b.id === convo.botIds[0]) && (
+                <Avatar
+                  color={data.bots.find((b) => b.id === convo.botIds[0])!.color}
+                  shape={data.bots.find((b) => b.id === convo.botIds[0])!.shape}
+                  size={28}
+                  status={presence}
+                  title={live?.action || statusLabel(presence)}
+                />
+              )}
+              <div className="bubble">
+                <span className="who">{data.bots.find((b) => b.id === convo.botIds[0])?.name}</span>
+                <div className="trace">{live?.action || statusLabel(presence)}</div>
+              </div>
+            </article>
+          )}
         </div>
 
         {error && <div className="banner">{error}</div>}
@@ -440,7 +536,9 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
           full={computerLevel === "full"}
           onClose={() => setComputerLevel("status")}
           onExpand={() => setComputerLevel("full")}
-          onRefresh={reload}
+          onRefresh={async () => {
+            await reload();
+          }}
         />
       )}
 
@@ -495,8 +593,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
             onCreate={async (payload) => {
               const res = await j<{ bot: Bot }>("/api/bots", { method: "POST", body: JSON.stringify(payload) });
               await reload();
-              setActiveId("convo_" + res.bot.id);
-              setMobileScreen("chat");
+              openConvo("convo_" + res.bot.id);
               setOverlay("none");
             }}
           />
@@ -551,12 +648,14 @@ function MessageView({
   message,
   bots,
   approvals,
+  status = "idle",
   onApprove,
   onReact,
 }: {
   message: Message;
   bots: Bot[];
   approvals: Approval[];
+  status?: BotStatus;
   onApprove: (id: string, decision: "allowed" | "denied" | "always") => void;
   onReact: (emoji: string) => void;
 }) {
@@ -566,7 +665,7 @@ function MessageView({
 
   return (
     <article className={`msg ${mine ? "mine" : ""} kind-${message.kind}`}>
-      {!mine && bot && <Avatar color={bot.color} shape={bot.shape} size={28} status="idle" />}
+      {!mine && bot && <Avatar color={bot.color} shape={bot.shape} size={28} status={status} title={statusLabel(status)} />}
       <div className="bubble">
         {!mine && bot && <span className="who">{bot.name}</span>}
         {message.kind === "trace" && <div className="trace">{message.content}</div>}
@@ -867,22 +966,68 @@ function Settings({
   );
 }
 
-function NewBot({ onCreate }: { onCreate: (p: { name: string; title: string; description: string }) => Promise<void> }) {
+function NewBot({
+  onCreate,
+}: {
+  onCreate: (p: { name: string; title: string; description: string; color: string; shape: AvatarShape }) => Promise<void>;
+}) {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [color, setColor] = useState<string>(AVATAR_COLORS[0]);
+  const [shape, setShape] = useState<AvatarShape>(AVATAR_SHAPES[0]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const previewStatus: BotStatus = busy ? "thinking" : "idle";
   return (
     <form
       className="stack-form"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
-        void onCreate({ name, title, description });
+        if (busy) return;
+        setBusy(true);
+        setError(null);
+        try {
+          await onCreate({ name, title, description, color, shape });
+        } catch (err) {
+          setError((err as Error).message);
+          setBusy(false);
+        }
       }}
     >
+      <div className="newbot-preview">
+        <Avatar color={color} shape={shape} size={64} status={previewStatus} title={statusLabel(previewStatus)} />
+        <div>
+          <strong>{name || "Nieuwe teammate"}</strong>
+          <p className="muted">{title || "Specialist"}</p>
+        </div>
+      </div>
       <input placeholder="Naam" value={name} onChange={(e) => setName(e.target.value)} required />
       <input placeholder="Rol / titel" value={title} onChange={(e) => setTitle(e.target.value)} />
       <textarea placeholder="Waarvoor is deze bot er?" value={description} onChange={(e) => setDescription(e.target.value)} />
-      <button type="submit">Aanmaken</button>
+      <div className="swatches">
+        {AVATAR_COLORS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            className={`swatch ${c === color ? "on" : ""}`}
+            style={{ background: c }}
+            aria-label={c}
+            onClick={() => setColor(c)}
+          />
+        ))}
+      </div>
+      <div className="row">
+        {AVATAR_SHAPES.map((s) => (
+          <button key={s} type="button" className={s === shape ? "on" : ""} onClick={() => setShape(s)}>
+            {s}
+          </button>
+        ))}
+      </div>
+      {error && <div className="banner">{error}</div>}
+      <button type="submit" disabled={busy || !name.trim()}>
+        {busy ? "Aanmaken…" : "Aanmaken"}
+      </button>
     </form>
   );
 }

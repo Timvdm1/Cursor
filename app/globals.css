@@ -203,6 +203,15 @@ button { cursor: pointer; }
   flex: 0 0 auto;
   box-shadow: inset 0 0 0 1.5px #ffffff55;
 }
+.crew-avatar::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  border: 2px solid var(--accent);
+  opacity: 0;
+  pointer-events: none;
+}
 .crew-ring {
   position: absolute; inset: 3px; border: 1.5px solid #ffffff55; border-radius: inherit; pointer-events: none;
 }
@@ -213,20 +222,46 @@ button { cursor: pointer; }
 .crew-eye.left { left: 24%; }
 .crew-eye.right { right: 24%; }
 .crew-avatar.is-idle { animation: bob 3.4s ease-in-out infinite; }
+.crew-avatar.is-idle .crew-eye.left { animation: glance 4.8s ease-in-out infinite; }
+.crew-avatar.is-idle .crew-eye.right { animation: glance 4.8s ease-in-out infinite .12s; }
+.crew-avatar.is-thinking { animation: nod .55s ease-out both; }
 .crew-avatar.is-thinking .crew-eye { animation: think 1.1s ease-in-out infinite; }
-.crew-avatar.is-working { animation: gear 0.7s ease-in-out infinite; }
+.crew-avatar.is-working { animation: gear .7s ease-in-out infinite; }
+.crew-avatar.is-working::after { animation: ring-out 1.4s ease-out infinite; }
 .crew-avatar.is-waiting { animation: wait 1.6s ease-in-out infinite; }
-.crew-avatar.is-blocked { filter: saturate(.6); animation: stuck 0.9s ease-in-out infinite; }
-.crew-avatar.is-done { animation: settle 0.6s ease-out both; }
+.crew-avatar.is-blocked { filter: saturate(.55) contrast(.95); animation: stuck .9s ease-in-out infinite; }
+.crew-avatar.is-done { animation: settle .6s ease-out both; }
 
-@keyframes bob { 50% { transform: translateY(-2px); } }
-@keyframes think { 50% { transform: scaleY(.4); } }
-@keyframes gear { 50% { transform: translateY(-3px) rotate(-6deg); } }
-@keyframes wait { 50% { transform: translateY(-1px) scale(1.04); } }
-@keyframes stuck { 50% { transform: translateX(1px); } }
-@keyframes settle { from { transform: scale(1.08); } to { transform: scale(1); } }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes glance {
+  0%, 42%, 100% { transform: translateX(0); }
+  50% { transform: translateX(18%); }
+  62% { transform: translateX(-10%); }
+}
+@keyframes think { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(.35); } }
+@keyframes nod {
+  0% { transform: rotate(0); }
+  40% { transform: rotate(-8deg) translateY(1px); }
+  100% { transform: rotate(0); }
+}
+@keyframes gear { 50% { transform: translateY(-3px) rotate(-7deg); } }
+@keyframes wait { 50% { transform: translateY(-1px) scale(1.05); } }
+@keyframes stuck { 25% { transform: translateX(1.5px); } 75% { transform: translateX(-1.5px); } }
+@keyframes settle { from { transform: scale(1.1); } to { transform: scale(1); } }
+@keyframes ring-out { from { opacity: .55; transform: scale(.9); } to { opacity: 0; transform: scale(1.22); } }
 @keyframes msg-in { from { opacity: 0; transform: translateY(6px) scale(.98); } }
 @keyframes slide { from { transform: translateX(16px); opacity: 0; } }
+@keyframes pulse-dot { 50% { transform: scale(1.25); opacity: .7; } }
+
+.comp-status.on span { animation: pulse-dot 1.2s ease-in-out infinite; }
+.typing-row .bubble { background: transparent; border: 0; padding: 2px 0; }
+.newbot-preview { display: flex; gap: 14px; align-items: center; margin-bottom: 4px; }
+.newbot-preview strong { display: block; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch {
+  width: 22px; height: 22px; border-radius: 99px; border: 2px solid transparent; padding: 0;
+}
+.swatch.on { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg-2); }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
