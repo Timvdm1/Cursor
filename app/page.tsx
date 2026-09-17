@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { SESSION_COOKIE } from "@/lib/session";
 import { loadState } from "@/lib/store";
 import { maskKey } from "@/lib/crypto";
+import { isFreeLlmProvider } from "@/lib/providers";
+import { activeLlmSummary } from "@/lib/models";
 import { AppShell } from "@/components/AppShell";
 
 export default async function HomePage() {
@@ -32,7 +34,10 @@ export default async function HomePage() {
         installs: state.installs,
         files: state.files,
         computer: state.computer,
-        keys: state.keys.map((k) => ({ provider: k.provider, last4: maskKey(k.last4) })),
+        keys: state.keys
+          .filter((k) => isFreeLlmProvider(k.provider))
+          .map((k) => ({ provider: k.provider, last4: maskKey(k.last4) })),
+        activeLlm: activeLlmSummary(state),
       }}
     />
   );

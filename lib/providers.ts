@@ -10,6 +10,7 @@ export type LlmProviderMeta = {
   keyHint: string;
   placeholder: string;
   defaultModel: string;
+  fallbackModels: string[];
   baseUrl?: string;
   notes: string;
 };
@@ -22,6 +23,7 @@ export const FREE_LLM_PROVIDERS: LlmProviderMeta[] = [
     keyHint: "Free tier in the Cerebras Cloud dashboard",
     placeholder: "csk-…",
     defaultModel: "llama-3.3-70b",
+    fallbackModels: ["llama3.1-8b", "gpt-oss-120b", "qwen-3-32b"],
     baseUrl: "https://api.cerebras.ai/v1",
     notes: "Fast inference; OpenAI-compatible endpoint.",
   },
@@ -32,6 +34,7 @@ export const FREE_LLM_PROVIDERS: LlmProviderMeta[] = [
     keyHint: "Experiment / free credits in Mistral La Plateforme",
     placeholder: "…",
     defaultModel: "mistral-small-latest",
+    fallbackModels: ["mistral-small-2506", "open-mistral-nemo", "mistral-small"],
     baseUrl: "https://api.mistral.ai/v1",
     notes: "Mistral chat models via the OpenAI-compatible API.",
   },
@@ -41,7 +44,8 @@ export const FREE_LLM_PROVIDERS: LlmProviderMeta[] = [
     signupUrl: "https://aistudio.google.com/apikey",
     keyHint: "Free API key in Google AI Studio",
     placeholder: "AIza…",
-    defaultModel: "gemini-2.0-flash",
+    defaultModel: "gemini-2.5-flash",
+    fallbackModels: ["gemini-2.0-flash", "gemini-flash-latest", "gemini-2.0-flash-001"],
     notes: "Gemini generateContent API.",
   },
   {
@@ -51,6 +55,7 @@ export const FREE_LLM_PROVIDERS: LlmProviderMeta[] = [
     keyHint: "Free tier in GroqCloud",
     placeholder: "gsk_…",
     defaultModel: "llama-3.3-70b-versatile",
+    fallbackModels: ["llama-3.1-8b-instant", "openai/gpt-oss-120b", "qwen3-32b"],
     baseUrl: "https://api.groq.com/openai/v1",
     notes: "Low latency; OpenAI-compatible.",
   },
@@ -60,7 +65,12 @@ export const FREE_LLM_PROVIDERS: LlmProviderMeta[] = [
     signupUrl: "https://openrouter.ai/settings/keys",
     keyHint: "Free models via the :free suffix (quota may apply)",
     placeholder: "sk-or-…",
-    defaultModel: "meta-llama/llama-3.3-70b-instruct:free",
+    defaultModel: "openrouter/free",
+    fallbackModels: [
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "google/gemini-2.0-flash-exp:free",
+      "mistralai/mistral-small-3.1-24b-instruct:free",
+    ],
     baseUrl: "https://openrouter.ai/api/v1",
     notes: "One key, many free models.",
   },

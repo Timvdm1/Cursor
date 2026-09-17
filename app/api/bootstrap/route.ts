@@ -3,6 +3,9 @@ import { currentUser } from "@/lib/session";
 import { loadState } from "@/lib/store";
 import { maskKey } from "@/lib/crypto";
 import { isFreeLlmProvider } from "@/lib/providers";
+import { activeLlmSummary } from "@/lib/models";
+
+export const runtime = "nodejs";
 
 export async function GET() {
   const user = await currentUser();
@@ -26,6 +29,7 @@ export async function GET() {
     keys: state.keys
       .filter((k) => isFreeLlmProvider(k.provider))
       .map((k) => ({ provider: k.provider, last4: maskKey(k.last4) })),
+    activeLlm: activeLlmSummary(state),
     handoffs: state.handoffs,
   });
 }

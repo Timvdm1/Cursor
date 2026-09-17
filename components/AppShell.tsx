@@ -36,6 +36,7 @@ type Bootstrap = {
   files: WorkspaceFile[];
   computer: ComputerState;
   keys: { provider: string; last4: string }[];
+  activeLlm?: { provider: string; label: string; model: string } | null;
 };
 
 type Overlay = "none" | "market" | "settings" | "newbot" | "newgroup" | "palette" | "agent";
@@ -153,22 +154,28 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
       content,
       createdAt: new Date().toISOString(),
     });
-    setLive({ convoId: convo.id, botId, status: "thinking", action: "Reading your message" });
+    setLive({
+      convoId: convo.id,
+      botId,
+      status: "thinking",
+      action: data.activeLlm ? `Calling ${data.activeLlm.label}` : "Reading your message",
+    });
     if (liveTimer.current) window.clearTimeout(liveTimer.current);
     liveTimer.current = window.setTimeout(() => {
       setLive((cur) =>
         cur && cur.convoId === convo.id && cur.status === "thinking"
-          ? { ...cur, status: "working", action: "Working" }
+          ? { ...cur, status: "working", action: data.activeLlm ? `${data.activeLlm.label} is writing` : "Working" }
           : cur,
       );
     }, 420);
     try {
-      await j("/api/chat", {
+      const res = await j<{ llmError?: string | null; llm?: { label: string; model: string } | null }>("/api/chat", {
         method: "POST",
         body: JSON.stringify({ conversationId: convo.id, content }),
       });
       const next = await reload();
       setPending(null);
+      if (res.llmError) setError(res.llmError);
       const nextConvo = next.conversations.find((c) => c.id === convo.id);
       if (nextConvo?.attention === "needs") {
         setLive({ convoId: convo.id, botId, status: "blocked", action: "Needs attention" });
@@ -180,7 +187,12 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
           action: next.computer.status || "Working",
         });
       } else {
-        setLive({ convoId: convo.id, botId, status: "done", action: "Done" });
+        setLive({
+          convoId: convo.id,
+          botId,
+          status: "done",
+          action: res.llm ? `Replied with ${res.llm.label}` : "Done",
+        });
         liveTimer.current = window.setTimeout(() => {
           setLive((cur) => (cur && cur.status === "done" ? null : cur));
         }, 700);
@@ -627,6 +639,11 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
               ➤
             </button>
           </form>
+          <p className="composer-llm muted">
+            {data.activeLlm
+              ? `Replies via ${data.activeLlm.label} · ${data.activeLlm.model}`
+              : "Connect a free-tier key in Settings → Usage & Billing to run real models."}
+          </p>
         </div>
       </main>
 
@@ -680,6 +697,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
             plugins={data.plugins}
             installs={data.installs}
             appearance={theme}
+            activeLlm={data.activeLlm || null}
             initialTab={settingsTab}
             onAppearance={async (t) => {
               setTheme(t);

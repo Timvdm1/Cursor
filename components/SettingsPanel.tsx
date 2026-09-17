@@ -27,6 +27,7 @@ export function SettingsPanel({
   plugins,
   installs,
   appearance,
+  activeLlm = null,
   initialTab = "general",
   onAppearance,
   onTimezone,
@@ -50,6 +51,7 @@ export function SettingsPanel({
   plugins: Plugin[];
   installs: PluginInstall[];
   appearance: Appearance;
+  activeLlm?: { provider: string; label: string; model: string } | null;
   initialTab?: SettingsTab;
   onAppearance: (t: Appearance) => Promise<void>;
   onTimezone: (tz: string) => Promise<void>;
@@ -106,7 +108,7 @@ export function SettingsPanel({
           />
         )}
         {tab === "usage" && (
-          <UsagePane keys={keys} onSaveKey={onSaveKey} onRemoveKey={onRemoveKey} />
+          <UsagePane keys={keys} activeLlm={activeLlm} onSaveKey={onSaveKey} onRemoveKey={onRemoveKey} />
         )}
         {tab === "team" && <TeamSetupPane />}
         {tab === "beta" && (
@@ -222,7 +224,10 @@ function GeneralPane({
           Default is Ask every time. This applies to the desktop in front of you. Never allowed keeps
           Bots on the cloud computer only. These settings do not prevent a Bot from using Agent Computer.
         </p>
-        <p className="muted">Crew manages model selection from your connected free-tier providers. There is no model picker.</p>
+        <p className="muted">
+          Crew uses the latest connected free-tier key for every Bot reply. There is no paid model picker.
+          Connect keys in Usage & Billing.
+        </p>
       </Section>
 
       <Section title="Auto-review">
@@ -397,10 +402,12 @@ function PluginsPane({
 
 function UsagePane({
   keys,
+  activeLlm,
   onSaveKey,
   onRemoveKey,
 }: {
   keys: { provider: string; last4: string }[];
+  activeLlm?: { provider: string; label: string; model: string } | null;
   onSaveKey: (provider: string, secret: string) => Promise<void>;
   onRemoveKey: (provider: string) => Promise<void>;
 }) {
@@ -412,7 +419,11 @@ function UsagePane({
           <div className="settings-row">
             <div>
               <strong>Included</strong>
-              <p className="muted">Resets weekly on each connected provider.</p>
+              <p className="muted">
+                {activeLlm
+                  ? `Chat uses ${activeLlm.label} · ${activeLlm.model}. Quota resets on that provider.`
+                  : "Connect a key below. Crew uses it for every Bot reply."}
+              </p>
             </div>
             <span className="muted">{connected ? `${connected} provider${connected === 1 ? "" : "s"}` : "None"}</span>
           </div>
@@ -439,8 +450,11 @@ function UsagePane({
         </div>
       </Section>
       <Section title="Connected providers">
-        <p className="muted">Free-tier providers only. Keys are encrypted and tested before they are saved.</p>
-        <ProviderKeys keys={keys} onSaveKey={onSaveKey} onRemoveKey={onRemoveKey} />
+        <p className="muted">
+          Free-tier providers only. Crew tests the key, encrypts it, then uses it for every chat.
+          The most recently connected key is the one Bots reply with.
+        </p>
+        <ProviderKeys keys={keys} activeProvider={activeLlm?.provider} onSaveKey={onSaveKey} onRemoveKey={onRemoveKey} />
       </Section>
     </>
   );
@@ -448,10 +462,12 @@ function UsagePane({
 
 function ProviderKeys({
   keys,
+  activeProvider,
   onSaveKey,
   onRemoveKey,
 }: {
   keys: { provider: string; last4: string }[];
+  activeProvider?: string;
   onSaveKey: (provider: string, secret: string) => Promise<void>;
   onRemoveKey: (provider: string) => Promise<void>;
 }) {
@@ -470,7 +486,9 @@ function ProviderKeys({
             <div className="provider-row" key={p.id}>
               <div className="provider-head">
                 <strong>{p.label}</strong>
-                <span className={`pill ${isOn ? "on" : ""}`}>{isOn ? "Connected" : "Not connected"}</span>
+                <span className={`pill ${isOn ? "on" : ""}`}>
+                  {isOn ? (activeProvider === p.id ? "Used for chat" : "Connected") : "Not connected"}
+                </span>
               </div>
               <p className="muted">{p.keyHint}</p>
               <p className="muted">

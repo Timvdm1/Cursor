@@ -19,6 +19,7 @@ describe("providerMeta", () => {
     for (const id of FREE_LLM_PROVIDER_IDS) {
       const meta = providerMeta(id);
       expect(meta.defaultModel.length).toBeGreaterThan(2);
+      expect(meta.fallbackModels.length).toBeGreaterThan(0);
       expect(meta.signupUrl.startsWith("https://")).toBe(true);
     }
   });

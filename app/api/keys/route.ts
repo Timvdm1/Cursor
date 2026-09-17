@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/session";
 import { mutate } from "@/lib/store";
 import { encryptSecret, last4, maskKey } from "@/lib/crypto";
-import { isFreeLlmProvider, type FreeLlmProviderId } from "@/lib/providers";
+import { isFreeLlmProvider, providerMeta, type FreeLlmProviderId } from "@/lib/providers";
 import { testProviderConnection } from "@/lib/models";
+
+export const runtime = "nodejs";
 
 export async function GET() {
   const user = await currentUser();
@@ -32,7 +34,22 @@ export async function POST(req: Request) {
 
   if (body.test !== false) {
     try {
-      await testProviderConnection(provider, secret);
+      const test = await testProviderConnection(provider, secret);
+      await mutate((state) => {
+        state.keys = state.keys.filter((k) => k.provider !== provider);
+        state.keys.push({
+          provider: provider as FreeLlmProviderId,
+          ciphertext: encryptSecret(secret),
+          last4: last4(secret),
+        });
+      });
+      return NextResponse.json({
+        ok: true,
+        provider,
+        last4: maskKey(last4(secret)),
+        model: test.model,
+        label: providerMeta(provider).label,
+      });
     } catch (err) {
       return NextResponse.json(
         { error: `Connection failed: ${(err as Error).message}` },
@@ -49,7 +66,12 @@ export async function POST(req: Request) {
       last4: last4(secret),
     });
   });
-  return NextResponse.json({ ok: true, provider, last4: maskKey(last4(secret)) });
+  return NextResponse.json({
+    ok: true,
+    provider,
+    last4: maskKey(last4(secret)),
+    label: providerMeta(provider).label,
+  });
 }
 
 export async function DELETE(req: Request) {

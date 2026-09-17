@@ -1,4 +1,4 @@
-import type { CrewState } from "./types";
+import type { CrewState, Message } from "./types";
 import { decryptSecret } from "./crypto";
 import {
   envKeyForProvider,
@@ -7,65 +7,168 @@ import {
   providerMeta,
   type FreeLlmProviderId,
 } from "./providers";
+import type { AgentEvent } from "./orchestrator";
 
 export type ResolvedModel = {
   provider: FreeLlmProviderId | "crew-local";
   model: string;
   apiKey?: string;
   baseUrl?: string;
+  error?: string;
 };
 
-function byok(state: CrewState, provider: FreeLlmProviderId): string | undefined {
+export type ChatCompletion = { text: string; model: string; provider: FreeLlmProviderId };
+
+type FetchLike = typeof fetch;
+
+function unique<T>(items: T[]): T[] {
+  return [...new Set(items)];
+}
+
+function modelsFor(provider: FreeLlmProviderId, preferred?: string): string[] {
+  const meta = providerMeta(provider);
+  return unique([preferred, meta.defaultModel, ...meta.fallbackModels].filter(Boolean) as string[]);
+}
+
+function connectedOrder(state: CrewState, preferred = "auto"): FreeLlmProviderId[] {
+  const saved = state.keys.map((k) => k.provider).filter(isFreeLlmProvider);
+  const head: FreeLlmProviderId[] = [];
+  if (preferred !== "auto" && isFreeLlmProvider(preferred)) head.push(preferred);
+  else if (saved.length) head.push(saved[saved.length - 1]);
+  return unique([...head, ...saved.slice().reverse(), ...FREE_LLM_PROVIDER_IDS]);
+}
+
+function keyFor(state: CrewState, provider: FreeLlmProviderId): { apiKey?: string; error?: string } {
   const row = state.keys.find((k) => k.provider === provider);
   if (row) {
     try {
-      return decryptSecret(row.ciphertext);
+      return { apiKey: decryptSecret(row.ciphertext) };
     } catch {
-      return undefined;
+      return { error: `Could not decrypt the ${providerMeta(provider).label} key. Reconnect it in Settings → Usage & Billing.` };
     }
   }
-  return envKeyForProvider(provider);
+  const env = envKeyForProvider(provider);
+  return env ? { apiKey: env } : {};
 }
 
 export function resolveModel(state: CrewState, preferred = "auto"): ResolvedModel {
-  const order: FreeLlmProviderId[] =
-    preferred !== "auto" && isFreeLlmProvider(preferred)
-      ? [preferred, ...FREE_LLM_PROVIDER_IDS.filter((p) => p !== preferred)]
-      : [...FREE_LLM_PROVIDER_IDS];
-
-  for (const p of order) {
-    const key = byok(state, p);
-    if (!key) continue;
+  let decryptError: string | undefined;
+  for (const p of connectedOrder(state, preferred)) {
+    const got = keyFor(state, p);
+    if (got.error) {
+      decryptError = got.error;
+      continue;
+    }
+    if (!got.apiKey) continue;
     const meta = providerMeta(p);
-    return { provider: p, model: meta.defaultModel, apiKey: key, baseUrl: meta.baseUrl };
+    return { provider: p, model: meta.defaultModel, apiKey: got.apiKey, baseUrl: meta.baseUrl };
   }
+  return { provider: "crew-local", model: "crew-local", error: decryptError };
+}
 
-  return { provider: "crew-local", model: "crew-local" };
+export function activeLlmSummary(state: CrewState): { provider: FreeLlmProviderId; label: string; model: string } | null {
+  const resolved = resolveModel(state);
+  if (resolved.provider === "crew-local" || !resolved.apiKey) return null;
+  return { provider: resolved.provider, label: providerMeta(resolved.provider).label, model: resolved.model };
+}
+
+export function chatHistory(messages: Message[], conversationId: string): { role: "user" | "assistant"; content: string }[] {
+  return messages
+    .filter((m) => m.conversationId === conversationId && m.kind === "text" && (m.role === "user" || m.role === "assistant"))
+    .slice(-16)
+    .map((m) => ({
+      role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+      content: m.content,
+    }));
+}
+
+export function applyLlmToEvents(
+  events: AgentEvent[],
+  completion: ChatCompletion,
+): AgentEvent[] {
+  const next = events.map((e) => ({ ...e }));
+  const lastText = [...next].reverse().find((e) => e.type === "text");
+  if (lastText && lastText.type === "text") lastText.text = completion.text;
+  else next.push({ type: "text", text: completion.text });
+  next.unshift({
+    type: "trace",
+    text: `Replied with ${providerMeta(completion.provider).label} · ${completion.model}`,
+  });
+  return next;
+}
+
+export function applyProviderError(events: AgentEvent[], message: string): AgentEvent[] {
+  const next = events.map((e) => ({ ...e }));
+  const text = `I couldn't use your connected API key.\n\n${message}`;
+  const lastText = [...next].reverse().find((e) => e.type === "text");
+  if (lastText && lastText.type === "text") lastText.text = text;
+  else next.push({ type: "text", text });
+  next.unshift({ type: "trace", text: "Provider call failed" });
+  return next;
+}
+
+function isRetryableModelError(message: string): boolean {
+  return /404|not found|unknown model|does not exist|no longer|decommissioned|model_not_found|invalid_model/i.test(
+    message,
+  );
+}
+
+function formatHttpError(status: number, body: string): string {
+  const clipped = body.replace(/\s+/g, " ").trim().slice(0, 280);
+  try {
+    const json = JSON.parse(body) as { error?: { message?: string } | string; message?: string };
+    const msg =
+      typeof json.error === "string"
+        ? json.error
+        : json.error?.message || json.message;
+    if (msg) return `${status}: ${msg}`;
+  } catch {
+    /* raw body */
+  }
+  return `${status}: ${clipped || "provider error"}`;
 }
 
 export async function completeChat(
   resolved: ResolvedModel,
   messages: { role: string; content: string }[],
-): Promise<string> {
+  fetchImpl: FetchLike = fetch,
+): Promise<ChatCompletion> {
   if (resolved.provider === "crew-local" || !resolved.apiKey) {
-    throw new Error("Geen LLM key verbonden");
+    throw new Error(resolved.error || "No LLM key connected. Add one in Settings → Usage & Billing.");
   }
-  if (resolved.provider === "google") {
-    return completeGemini(resolved.apiKey, resolved.model, messages);
+  const provider = resolved.provider;
+  const models = modelsFor(provider, resolved.model);
+  let lastError = "Provider returned an empty reply.";
+  for (const model of models) {
+    try {
+      const text =
+        provider === "google"
+          ? await completeGemini(resolved.apiKey, model, messages, fetchImpl)
+          : await completeOpenAICompatible({
+              apiKey: resolved.apiKey,
+              baseUrl: resolved.baseUrl || providerMeta(provider).baseUrl,
+              model,
+              messages,
+              extraHeaders:
+                provider === "openrouter"
+                  ? {
+                      "HTTP-Referer": process.env.CREW_PUBLIC_URL || "https://crew.app",
+                      "X-Title": "Crew",
+                    }
+                  : undefined,
+              fetchImpl,
+            });
+      if (!text.trim()) {
+        lastError = `${providerMeta(provider).label} returned an empty reply.`;
+        continue;
+      }
+      return { text: text.trim(), model, provider };
+    } catch (err) {
+      lastError = (err as Error).message;
+      if (!isRetryableModelError(lastError)) break;
+    }
   }
-  return completeOpenAICompatible({
-    apiKey: resolved.apiKey,
-    baseUrl: resolved.baseUrl || providerMeta(resolved.provider).baseUrl,
-    model: resolved.model,
-    messages,
-    extraHeaders:
-      resolved.provider === "openrouter"
-        ? {
-            "HTTP-Referer": process.env.CREW_PUBLIC_URL || "https://crew.app",
-            "X-Title": "Crew",
-          }
-        : undefined,
-  });
+  throw new Error(`${providerMeta(provider).label} failed: ${lastError}`);
 }
 
 export async function completeOpenAICompatible(opts: {
@@ -74,9 +177,11 @@ export async function completeOpenAICompatible(opts: {
   model: string;
   messages: { role: string; content: string }[];
   extraHeaders?: Record<string, string>;
+  fetchImpl?: FetchLike;
 }): Promise<string> {
+  const fetchImpl = opts.fetchImpl || fetch;
   const url = `${(opts.baseUrl || "https://api.openai.com/v1").replace(/\/$/, "")}/chat/completions`;
-  const res = await fetch(url, {
+  const res = await fetchImpl(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${opts.apiKey}`,
@@ -87,11 +192,11 @@ export async function completeOpenAICompatible(opts: {
       model: opts.model,
       messages: opts.messages,
       temperature: 0.4,
+      max_tokens: 1024,
     }),
   });
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`LLM ${res.status}: ${err.slice(0, 240)}`);
+    throw new Error(formatHttpError(res.status, await res.text()));
   }
   const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   return json.choices?.[0]?.message?.content || "";
@@ -101,34 +206,37 @@ async function completeGemini(
   apiKey: string,
   model: string,
   messages: { role: string; content: string }[],
+  fetchImpl: FetchLike,
 ): Promise<string> {
   const system = messages.find((m) => m.role === "system")?.content;
-  const contents = messages
+  let contents = messages
     .filter((m) => m.role !== "system")
     .map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     }));
+  while (contents[0]?.role === "model") contents = contents.slice(1);
+  if (!contents.length) {
+    contents = [{ role: "user", parts: [{ text: "Hello" }] }];
+  }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const res = await fetch(url, {
+  const res = await fetchImpl(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents,
       ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-      generationConfig: { temperature: 0.4 },
+      generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
     }),
   });
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Gemini ${res.status}: ${err.slice(0, 240)}`);
+    throw new Error(formatHttpError(res.status, await res.text()));
   }
   const json = (await res.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
   };
-  const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
-  return text;
+  return json.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
 }
 
 /** @deprecated use completeChat */
@@ -141,14 +249,28 @@ export async function completeOpenAI(opts: {
   return completeOpenAICompatible(opts);
 }
 
-export async function testProviderConnection(provider: FreeLlmProviderId, apiKey: string): Promise<{ ok: true; sample: string }> {
+export function teammateSystemPrompt(bot?: { name: string; title: string; description: string; systemPrompt: string }): string {
+  if (!bot) return "You are a Crew teammate. Answer helpfully in the user's language.";
+  return [
+    `You are ${bot.name}, ${bot.title}. ${bot.description}`,
+    bot.systemPrompt,
+    "Answer as this teammate. Be concrete and useful. You have a working model — never say you cannot access an API or that you are only a local demo.",
+  ].join("\n");
+}
+
+export async function testProviderConnection(
+  provider: FreeLlmProviderId,
+  apiKey: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<{ ok: true; sample: string; model: string }> {
   const meta = providerMeta(provider);
-  const sample = await completeChat(
+  const completion = await completeChat(
     { provider, model: meta.defaultModel, apiKey, baseUrl: meta.baseUrl },
     [
-      { role: "system", content: "Antwoord in één korte zin." },
-      { role: "user", content: "Zeg alleen: verbonden." },
+      { role: "system", content: "Reply with exactly one short word." },
+      { role: "user", content: "Say: connected" },
     ],
+    fetchImpl,
   );
-  return { ok: true, sample: sample.slice(0, 120) };
+  return { ok: true, sample: completion.text.slice(0, 120), model: completion.model };
 }

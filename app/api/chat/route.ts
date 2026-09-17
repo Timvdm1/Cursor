@@ -3,8 +3,18 @@ import { currentUser } from "@/lib/session";
 import { mutate } from "@/lib/store";
 import { eventsToMessages, runTurn } from "@/lib/orchestrator";
 import { canHandoff, nextHopCount } from "@/lib/handoffs";
-import { completeChat, resolveModel } from "@/lib/models";
+import {
+  activeLlmSummary,
+  applyLlmToEvents,
+  applyProviderError,
+  chatHistory,
+  completeChat,
+  resolveModel,
+  teammateSystemPrompt,
+  type ChatCompletion,
+} from "@/lib/models";
 import { navigate } from "@/lib/computer";
+import { providerMeta } from "@/lib/providers";
 import type { Message } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -20,7 +30,7 @@ export async function POST(req: Request) {
   const content = (body.content || "").trim();
   if (!content) return NextResponse.json({ error: "Empty message" }, { status: 400 });
 
-  const result = await mutate(async (state) => {
+  const prepared = await mutate((state) => {
     const convo = state.conversations.find((c) => c.id === body.conversationId);
     if (!convo) throw new Error("missing_convo");
 
@@ -42,28 +52,48 @@ export async function POST(req: Request) {
     const sender = primaryBot?.id || convo.botIds[0];
     convo.workingBotId = sender;
 
-    const events = await runTurn({ state, conversationId: convo.id, userText: content, hopCount: 0 });
+    return {
+      conversationId: convo.id,
+      sender,
+      bot: primaryBot,
+      resolved: resolveModel(state, primaryBot?.model),
+      history: chatHistory(state.messages, convo.id),
+      userMsg,
+    };
+  }).catch((err: Error) => {
+    if (err.message === "missing_convo") return null;
+    throw err;
+  });
 
-    const model = resolveModel(state, primaryBot?.model);
-    if (model.apiKey && model.provider !== "crew-local") {
-      try {
-        const history = state.messages
-          .filter((m) => m.conversationId === convo.id && m.kind === "text")
-          .slice(-12)
-          .map((m) => ({
-            role: m.role === "assistant" ? "assistant" : "user",
-            content: m.content,
-          }));
-        const sys = primaryBot?.systemPrompt || "Je bent een Crew-bot.";
-        const llm = await completeChat(model, [{ role: "system", content: sys }, ...history]);
-        if (llm) {
-          const lastText = [...events].reverse().find((e) => e.type === "text");
-          if (lastText && lastText.type === "text") lastText.text = llm;
-        }
-      } catch {
-        /* keep local plan */
-      }
+  if (!prepared) return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+
+  let completion: ChatCompletion | null = null;
+  let llmError: string | null = prepared.resolved.error || null;
+  if (prepared.resolved.apiKey && prepared.resolved.provider !== "crew-local") {
+    try {
+      completion = await completeChat(prepared.resolved, [
+        { role: "system", content: teammateSystemPrompt(prepared.bot) },
+        ...prepared.history,
+      ]);
+      llmError = null;
+    } catch (err) {
+      llmError = (err as Error).message;
     }
+  }
+
+  const result = await mutate(async (state) => {
+    const convo = state.conversations.find((c) => c.id === prepared.conversationId);
+    if (!convo) throw new Error("missing_convo");
+    const sender = prepared.sender;
+
+    let events = await runTurn({
+      state,
+      conversationId: convo.id,
+      userText: content,
+      hopCount: 0,
+    });
+    if (completion) events = applyLlmToEvents(events, completion);
+    else if (llmError) events = applyProviderError(events, llmError);
 
     const produced = eventsToMessages(events, convo.id, sender);
     state.messages.push(...produced);
@@ -126,7 +156,7 @@ export async function POST(req: Request) {
           schedule: "0 8 * * 1-5",
           timezone: state.user?.timezone || "Europe/Amsterdam",
           paused: false,
-          approvalBoundary: "Geen externe sends.",
+          approvalBoundary: "No external sends.",
           nextRunAt: new Date(Date.now() + 3600_000).toISOString(),
           createdAt: new Date().toISOString(),
         };
@@ -156,7 +186,7 @@ export async function POST(req: Request) {
       const follow = await runTurn({
         state,
         conversationId: hd.conversationId,
-        userText: `[handoff van ${hd.fromBotId}] ${hd.body}`,
+        userText: `[handoff from ${hd.fromBotId}] ${hd.body}`,
         hopCount: nextHopCount(hd.hopCount),
       });
       const extra = eventsToMessages(follow, hd.conversationId, hd.toBotId);
@@ -165,7 +195,20 @@ export async function POST(req: Request) {
       hd.status = "done";
     }
 
-    return { userMsg, produced, events, computer: state.computer };
+    return {
+      userMsg: prepared.userMsg,
+      produced,
+      events,
+      computer: state.computer,
+      llm: completion
+        ? {
+            provider: completion.provider,
+            model: completion.model,
+            label: providerMeta(completion.provider).label,
+          }
+        : activeLlmSummary(state),
+      llmError,
+    };
   }).catch((err: Error) => {
     if (err.message === "missing_convo") return null;
     throw err;
@@ -196,7 +239,7 @@ export async function PUT(req: Request) {
     const events = await runTurn({
       state,
       conversationId: hd.conversationId,
-      userText: `[handoff van ${hd.fromBotId}] ${hd.body}`,
+      userText: `[handoff from ${hd.fromBotId}] ${hd.body}`,
       hopCount: nextHopCount(hd.hopCount),
     });
     const msgs = eventsToMessages(events, hd.conversationId, hd.toBotId);
