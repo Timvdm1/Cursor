@@ -1,0 +1,10 @@
+{
+  "install": "npm ci || npm install",
+  "start": "npm run dev",
+  "terminals": [
+    {
+      "name": "crew-dev",
+      "command": "npm run dev"
+    }
+  ]
+}
