@@ -49,7 +49,7 @@ export function seedState(): CrewState {
     email: "demo@crew.app",
     name: "Tim",
     passwordHash: hashPassword("crew"),
-    appearance: "dark",
+    appearance: "light",
     timezone: "Europe/Amsterdam",
   };
 

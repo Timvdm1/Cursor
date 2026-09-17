@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "./Avatar";
 import type {
   Approval,
@@ -62,10 +62,13 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
   const [query, setQuery] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
   const [slashOpen, setSlashOpen] = useState(false);
-  const [computerLevel, setComputerLevel] = useState<"status" | "preview" | "full">("status");
+  const [computerLevel, setComputerLevel] = useState<"status" | "preview" | "full">("preview");
   const [error, setError] = useState<string | null>(null);
+  const [plusOpen, setPlusOpen] = useState(false);
   const [theme, setTheme] = useState<"system" | "dark" | "light">(
-    initial.user.appearance === "light" || initial.user.appearance === "system" ? initial.user.appearance : "dark",
+    initial.user.appearance === "dark" || initial.user.appearance === "system" || initial.user.appearance === "light"
+      ? initial.user.appearance
+      : "light",
   );
   const [systemLight, setSystemLight] = useState(false);
   const [rosterOpen, setRosterOpen] = useState(false);
@@ -105,6 +108,16 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: light)");
     const apply = () => setSystemLight(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 860px)");
+    const apply = () => {
+      if (mq.matches) setComputerLevel((level) => (level === "preview" ? "status" : level));
+    };
     apply();
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
@@ -212,6 +225,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
     setActiveId(id);
     setDraft(drafts[id] || "");
     setRosterOpen(false);
+    setPlusOpen(false);
     setMobileScreen("chat");
     setData((d) => ({
       ...d,
@@ -228,6 +242,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
     setMobileScreen("home");
     setComputerLevel("status");
     setMoreOpen(false);
+    setPlusOpen(false);
     setAccountOpen(false);
   }
 
@@ -270,13 +285,17 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
       {rosterOpen && <button className="scrim" aria-label="Close sidebar" onClick={() => setRosterOpen(false)} />}
       <aside className={`roster ${rosterOpen ? "open" : ""}`}>
         <header className="roster-head desk-bar">
-          <div className="brand">
-            <span className="brand-mark" />
-            Crew
-          </div>
-          <button className="ghost" onClick={() => setOverlay("palette")} title="Search">
-            Search
-          </button>
+          <label className="roster-search">
+            <span className="search-ico" aria-hidden>
+              ⌕
+            </span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Zoeken"
+              aria-label="Zoeken"
+            />
+          </label>
         </header>
         <header className="ios-home-head">
           <h1>Crew</h1>
@@ -323,6 +342,16 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
         <div className="roster-list">
           {data.conversations
             .filter((c) => c.botIds.some((id) => data.bots.some((b) => b.id === id)))
+            .filter((c) => {
+              const q = query.trim().toLowerCase();
+              if (!q) return true;
+              const bot = data.bots.find((b) => b.id === c.botIds[0]);
+              return (
+                c.title.toLowerCase().includes(q) ||
+                c.lastPreview.toLowerCase().includes(q) ||
+                (bot?.name || "").toLowerCase().includes(q)
+              );
+            })
             .map((c) => {
             const bot = data.bots.find((b) => b.id === c.botIds[0]);
             const status = presenceOf(c);
@@ -357,15 +386,19 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
           })}
         </div>
         <footer className="roster-foot">
-          <button onClick={() => setOverlay("newbot")}>Create new agent</button>
-          <button onClick={() => setOverlay("newgroup")}>New group</button>
+          <button className="market-link" onClick={() => setOverlay("market")}>
+            <span className="market-ico" aria-hidden>
+              ▦
+            </span>
+            Marketplace
+          </button>
           <div className="account-menu">
             <button
               className="account-chip"
               aria-label="Account menu"
               onClick={() => setAccountOpen((v) => !v)}
             >
-              <span className="account-dot" />
+              <span className="account-initials">{initialsOf(data.user.name)}</span>
               {data.user.name}
             </button>
             {accountOpen && (
@@ -390,19 +423,51 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
           <button className="menu-btn" aria-label="Back" onClick={backHome}>
             ‹
           </button>
+          <div className="plus-wrap desk-only">
+            <button
+              className="head-plus"
+              aria-label="New"
+              onClick={() => {
+                setPlusOpen((v) => !v);
+                setMoreOpen(false);
+              }}
+            >
+              +
+            </button>
+            {plusOpen && (
+              <div className="plus-pop">
+                <button
+                  onClick={() => {
+                    setOverlay("newbot");
+                    setPlusOpen(false);
+                  }}
+                >
+                  Create new agent
+                </button>
+                <button
+                  onClick={() => {
+                    setOverlay("newgroup");
+                    setPlusOpen(false);
+                  }}
+                >
+                  New group
+                </button>
+              </div>
+            )}
+          </div>
           <div className="chat-title phone-center" onClick={() => setOverlay("agent")} role="button">
             {convo?.kind !== "group" && data.bots.find((b) => b.id === convo?.botIds[0]) && (
               <Avatar
                 color={data.bots.find((b) => b.id === convo?.botIds[0])!.color}
                 shape={data.bots.find((b) => b.id === convo?.botIds[0])!.shape}
-                size={28}
+                size={22}
                 status={presence}
                 title={live?.convoId === convo?.id ? live.action : statusLabel(presence)}
               />
             )}
             <div>
               <h1>{convo?.title}</h1>
-              <p>
+              <p className="phone-only">
                 {presence !== "idle"
                   ? statusLabel(presence)
                   : convo?.kind === "group"
@@ -416,27 +481,27 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
           </div>
           <div className="head-actions">
             <button
-              className={`comp-status ${working ? "on" : ""}`}
+              className={`comp-status phone-only ${working ? "on" : ""}`}
               onClick={() => setComputerLevel((l) => (l === "preview" ? "status" : "preview"))}
               title="Agent Computer"
             >
               <span />
-              <em className="desk-label">Agent Computer</em>
-            </button>
-            <button className="ghost desk-only" onClick={() => setComputerLevel("full")}>
-              Take control
-            </button>
-            <button className="ghost desk-only" onClick={() => setOverlay("market")}>
-              Marketplace
             </button>
             <button
-              className="ghost desk-only"
+              className="icon-ghost"
+              aria-label="Conversation details"
+              title="Conversation details"
               onClick={() => setOverlay("agent")}
             >
-              Agent settings
-            </button>
-            <button className="ghost desk-only" onClick={() => openSettings("general")}>
-              Settings
+              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+                <path
+                  d="M4 2.5h8v11L8 11.2 4 13.5v-11Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </button>
             <div className="more">
               <button className="ghost more-btn" aria-label="More" onClick={() => setMoreOpen((v) => !v)}>
@@ -490,46 +555,50 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
         </header>
 
         <div className="transcript" ref={scroller}>
-          {messages.map((m) => (
-            <MessageView
-              key={m.id}
-              message={m}
-              bots={data.bots}
-              approvals={data.approvals}
-              status={m.senderBotId ? presenceOf(convo, m.senderBotId) : "idle"}
-              onApprove={async (id, decision) => {
-                await j("/api/approvals", { method: "POST", body: JSON.stringify({ id, decision }) });
-                await reload();
-              }}
-              onReact={async (emoji) => {
-                await j("/api/meta", { method: "POST", body: JSON.stringify({ messageId: m.id, emoji }) });
-                await reload();
-              }}
-            />
-          ))}
+          {messages.map((m, i) => {
+            const prev = messages[i - 1];
+            const next = messages[i + 1];
+            const newDay =
+              !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
+            let runStart = i;
+            while (runStart > 0 && messages[runStart - 1].role !== "user" && m.role !== "user") {
+              runStart -= 1;
+            }
+            const endOfBotRun = m.role !== "user" && (!next || next.role === "user");
+            const run = endOfBotRun ? messages.slice(runStart, i + 1) : [];
+            const botName = data.bots.find((b) => b.id === (m.senderBotId || convo?.botIds[0]))?.name;
+            return (
+              <Fragment key={m.id}>
+                {newDay && <div className="day-sep">{dayStamp(m.createdAt)}</div>}
+                <MessageView
+                  message={m}
+                  approvals={data.approvals}
+                  onApprove={async (id, decision) => {
+                    await j("/api/approvals", { method: "POST", body: JSON.stringify({ id, decision }) });
+                    await reload();
+                  }}
+                  onReact={async (emoji) => {
+                    await j("/api/meta", { method: "POST", body: JSON.stringify({ messageId: m.id, emoji }) });
+                    await reload();
+                  }}
+                />
+                {endOfBotRun && (
+                  <p className="thread-meta">{threadMetaLine(run, botName)}</p>
+                )}
+              </Fragment>
+            );
+          })}
           {pending && pending.conversationId === convo?.id && (
             <MessageView
               message={pending}
-              bots={data.bots}
               approvals={data.approvals}
-              status="idle"
               onApprove={() => undefined}
               onReact={() => undefined}
             />
           )}
           {busy && convo && (
             <article className="msg typing-row">
-              {data.bots.find((b) => b.id === convo.botIds[0]) && (
-                <Avatar
-                  color={data.bots.find((b) => b.id === convo.botIds[0])!.color}
-                  shape={data.bots.find((b) => b.id === convo.botIds[0])!.shape}
-                  size={28}
-                  status={presence}
-                  title={live?.action || statusLabel(presence)}
-                />
-              )}
               <div className="bubble">
-                <span className="who">{data.bots.find((b) => b.id === convo.botIds[0])?.name}</span>
                 <div className="trace">{live?.action || statusLabel(presence)}</div>
               </div>
             </article>
@@ -592,12 +661,12 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
               void send();
             }}
           >
-            <button type="button" className="icon" title="Attachment" onClick={() => setDraft((d) => d + " [/workspace] ")}>
+            <button type="button" className="icon attach" title="Attachment" onClick={() => setDraft((d) => d + " [/workspace] ")}>
               +
             </button>
             <textarea
               value={draft}
-              placeholder={convo ? `Message ${convo.title}` : "Message"}
+              placeholder={convo ? `Bericht sturen naar ${convo.title}` : "Bericht sturen"}
               onChange={(e) => onDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -609,7 +678,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
             />
             <button
               type="button"
-              className="icon"
+              className="icon phone-only"
               title="Mic"
               onClick={() => {
                 const w = window as unknown as {
@@ -635,8 +704,17 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
             >
               ⌖
             </button>
-            <button className="send" type="submit" disabled={busy}>
-              ➤
+            <button className="send" type="submit" disabled={busy || !draft.trim()} aria-label="Send">
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+                <path
+                  d="M3 8h9M8 3.5 12.5 8 8 12.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </button>
           </form>
           <p className="composer-llm muted">
@@ -647,19 +725,19 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
         </div>
       </main>
 
-      {computerLevel !== "status" && (
-        <ComputerPane
-          computer={data.computer}
-          files={data.files}
-          wallpaper={wallpaper}
-          full={computerLevel === "full"}
-          onClose={() => setComputerLevel("status")}
-          onExpand={() => setComputerLevel("full")}
-          onRefresh={async () => {
-            await reload();
-          }}
-        />
-      )}
+      <ComputerPane
+        computer={data.computer}
+        files={data.files}
+        wallpaper={wallpaper}
+        botName={convo?.title || "Bot"}
+        full={computerLevel === "full"}
+        open={computerLevel !== "status"}
+        onClose={() => setComputerLevel("status")}
+        onExpand={() => setComputerLevel("full")}
+        onRefresh={async () => {
+          await reload();
+        }}
+      />
 
       {overlay === "market" && (
         <Modal title="Marketplace" onClose={() => setOverlay("none")}>
@@ -844,28 +922,21 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
 
 function MessageView({
   message,
-  bots,
   approvals,
-  status = "idle",
   onApprove,
   onReact,
 }: {
   message: Message;
-  bots: Bot[];
   approvals: Approval[];
-  status?: BotStatus;
   onApprove: (id: string, decision: "allowed" | "denied" | "always") => void;
   onReact: (emoji: string) => void;
 }) {
-  const bot = bots.find((b) => b.id === message.senderBotId);
   const mine = message.role === "user";
   const pending = approvals.find((a) => a.messageId === message.id && a.status === "pending");
 
   return (
     <article className={`msg ${mine ? "mine" : ""} kind-${message.kind}`}>
-      {!mine && bot && <Avatar color={bot.color} shape={bot.shape} size={28} status={status} title={statusLabel(status)} />}
       <div className="bubble">
-        {!mine && bot && <span className="who">{bot.name}</span>}
         {message.kind === "trace" && <div className="trace">{message.content}</div>}
         {message.kind === "handoff" && <div className="event">Handoff · {message.content}</div>}
         {message.kind === "event" && <div className="event">{message.content}</div>}
@@ -901,7 +972,7 @@ function MessageView({
           </div>
         )}
         {(message.kind === "text" || !["trace", "handoff", "event", "card", "approval"].includes(message.kind)) && (
-          <p>{message.content}</p>
+          <RichText text={message.content} />
         )}
         {!mine && (
           <div className="react">
@@ -914,6 +985,23 @@ function MessageView({
           </div>
         )}
       </div>
+      <div className="msg-actions">
+        <button
+          type="button"
+          title="Copy"
+          onClick={() => void navigator.clipboard.writeText(message.content)}
+        >
+          ⎘
+        </button>
+        <button type="button" title="Share" onClick={() => void navigator.clipboard.writeText(message.content)}>
+          ↗
+        </button>
+        {!mine && (
+          <button type="button" title="React" onClick={() => onReact("❤️")}>
+            …
+          </button>
+        )}
+      </div>
     </article>
   );
 }
@@ -922,7 +1010,9 @@ function ComputerPane({
   computer,
   files,
   wallpaper,
+  botName,
   full,
+  open,
   onClose,
   onExpand,
   onRefresh,
@@ -930,7 +1020,9 @@ function ComputerPane({
   computer: ComputerState;
   files: WorkspaceFile[];
   wallpaper: string;
+  botName: string;
   full: boolean;
+  open: boolean;
   onClose: () => void;
   onExpand: () => void;
   onRefresh: () => Promise<void>;
@@ -938,89 +1030,105 @@ function ComputerPane({
   const [cmd, setCmd] = useState("ls /workspace");
   const [url, setUrl] = useState(computer.url);
   const [out, setOut] = useState("");
+  const showDesktop = computer.active || full;
 
   return (
-    <section className={`computer ${full ? "full" : ""}`}>
-      <header>
-        <span className="traffic">
-          <i />
-          <i />
-          <i />
+    <section className={`computer ${full ? "full" : "docked"} ${open || full ? "open" : ""} ${computer.active ? "live" : ""}`}>
+      <header className="screen-head">
+        <span className="screen-ico" aria-hidden>
+          ⌗
         </span>
-        <strong>{computer.takeover ? "You have control" : "Agent Computer"}</strong>
-        <button onClick={onExpand}>⛶</button>
-        <button onClick={onClose}>×</button>
+        <button className="icon-ghost" onClick={onExpand} aria-label="Expand screen">
+          ⛶
+        </button>
+        {(full || open) && (
+          <button className="phone-only icon-ghost" onClick={onClose} aria-label="Close screen">
+            ×
+          </button>
+        )}
       </header>
-      <div className="desktop" style={{ backgroundImage: wallpaper }}>
-        <div className="grain" />
-        <div className="window">
-          <div className="urlbar">
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                await j("/api/computer", { method: "POST", body: JSON.stringify({ action: "navigate", url }) });
+      {showDesktop ? (
+        <>
+          <div className="desktop" style={{ backgroundImage: wallpaper }}>
+            <div className="grain" />
+            <div className="window">
+              <div className="urlbar">
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    await j("/api/computer", { method: "POST", body: JSON.stringify({ action: "navigate", url }) });
+                    await onRefresh();
+                  }}
+                >
+                  <input value={url} onChange={(e) => setUrl(e.target.value)} />
+                </form>
+              </div>
+              <div className="page">
+                <p className="muted">{computer.status}</p>
+                <h3>{computer.title}</h3>
+                <p>{computer.url}</p>
+                <ul>
+                  {computer.logs.slice(0, 6).map((l, i) => (
+                    <li key={i}>{l}</li>
+                  ))}
+                </ul>
+                {computer.takeover && (
+                  <p className="warn">Sensitive step — finish login or 2FA here. Don’t paste codes in chat.</p>
+                )}
+              </div>
+              <span className="cursor" style={{ left: `${computer.cursor.x}%`, top: `${computer.cursor.y}%` }} />
+            </div>
+          </div>
+          <div className="comp-tools">
+            <button
+              onClick={async () => {
+                await j("/api/computer", { method: "POST", body: JSON.stringify({ action: computer.takeover ? "release" : "takeover" }) });
                 await onRefresh();
               }}
             >
-              <input value={url} onChange={(e) => setUrl(e.target.value)} />
+              {computer.takeover ? "Return control" : "Take control"}
+            </button>
+            <button
+              onClick={async () => {
+                await j("/api/computer", { method: "POST", body: JSON.stringify({ action: "updateComputer" }) });
+                await onRefresh();
+              }}
+            >
+              Recover computer
+            </button>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const res = await j<{ output: string }>("/api/computer", {
+                  method: "POST",
+                  body: JSON.stringify({ action: "sandbox", value: cmd }),
+                });
+                setOut(res.output);
+                await onRefresh();
+              }}
+            >
+              <input value={cmd} onChange={(e) => setCmd(e.target.value)} />
             </form>
           </div>
-          <div className="page">
-            <p className="muted">{computer.status}</p>
-            <h3>{computer.title}</h3>
-            <p>{computer.url}</p>
-            <ul>
-              {computer.logs.slice(0, 6).map((l, i) => (
-                <li key={i}>{l}</li>
-              ))}
-            </ul>
-            {computer.takeover && (
-              <p className="warn">Sensitive step — finish login or 2FA here. Don’t paste codes in chat.</p>
-            )}
+          {out && <pre className="term">{out}</pre>}
+          <div className="files">
+            {files.map((f) => (
+              <details key={f.path}>
+                <summary>{f.path}</summary>
+                <pre>{f.content}</pre>
+              </details>
+            ))}
           </div>
-          <span className="cursor" style={{ left: `${computer.cursor.x}%`, top: `${computer.cursor.y}%` }} />
+        </>
+      ) : (
+        <div className="screen-idle">
+          <p className="screen-title">Scherm van {botName}</p>
+          <p className="screen-hint">
+            Routines zijn terugkerende taken die deze Bot volgens een schema uitvoert. Vraag hem in de chat om er een te
+            stellen.
+          </p>
         </div>
-      </div>
-      <div className="comp-tools">
-        <button
-          onClick={async () => {
-            await j("/api/computer", { method: "POST", body: JSON.stringify({ action: computer.takeover ? "release" : "takeover" }) });
-            await onRefresh();
-          }}
-        >
-          {computer.takeover ? "Return control" : "Take control"}
-        </button>
-        <button
-          onClick={async () => {
-            await j("/api/computer", { method: "POST", body: JSON.stringify({ action: "updateComputer" }) });
-            await onRefresh();
-          }}
-        >
-          Recover computer
-        </button>
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const res = await j<{ output: string }>("/api/computer", {
-              method: "POST",
-              body: JSON.stringify({ action: "sandbox", value: cmd }),
-            });
-            setOut(res.output);
-            await onRefresh();
-          }}
-        >
-          <input value={cmd} onChange={(e) => setCmd(e.target.value)} />
-        </form>
-      </div>
-      {out && <pre className="term">{out}</pre>}
-      <div className="files">
-        {files.map((f) => (
-          <details key={f.path}>
-            <summary>{f.path}</summary>
-            <pre>{f.content}</pre>
-          </details>
-        ))}
-      </div>
+      )}
     </section>
   );
 }
@@ -1383,11 +1491,62 @@ function formatWhen(iso: string): string {
   if (Number.isNaN(d.getTime())) return "";
   const now = new Date();
   if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    return d.toLocaleTimeString("nl-NL", { hour: "numeric", minute: "2-digit" });
   }
   const yest = new Date(now);
   yest.setDate(now.getDate() - 1);
-  if (d.toDateString() === yest.toDateString()) return "Yesterday";
-  return d.toLocaleDateString("en-US", { day: "numeric", month: "short" });
+  if (d.toDateString() === yest.toDateString()) return "Gisteren";
+  return d.toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+}
+
+function dayStamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const time = d.toLocaleTimeString("nl-NL", { hour: "numeric", minute: "2-digit" });
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return `Vandaag ${time}`;
+  const yest = new Date(now);
+  yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return `Gisteren ${time}`;
+  return `${d.toLocaleDateString("nl-NL", { day: "numeric", month: "short" })} ${time}`;
+}
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "C";
+  return parts
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase();
+}
+
+function threadMetaLine(run: Message[], botName?: string): string {
+  const reactions = run.flatMap((m) => Object.entries(m.reactions || {}).filter(([, n]) => n > 0));
+  const emoji = reactions[0]?.[0] || "";
+  const withBit = emoji ? ` met ${emoji}` : "";
+  return `${run.length} bericht${run.length === 1 ? "" : "en"}${withBit}${botName ? ` ${botName}` : ""}`;
+}
+
+function RichText({ text }: { text: string }) {
+  const parts = text.split(/((?:https?:\/\/[^\s]+)|(?:[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?)|(?:websites\/[^\s]+))/gi);
+  return (
+    <p>
+      {parts.map((part, i) => {
+        if (!part) return null;
+        const isLink =
+          /^https?:\/\//i.test(part) ||
+          /^websites\//i.test(part) ||
+          /^[a-z0-9.-]+\.[a-z]{2,}/i.test(part);
+        if (!isLink) return <Fragment key={i}>{part}</Fragment>;
+        const href = part.startsWith("http") ? part : `https://${part}`;
+        return (
+          <a key={i} href={href} target="_blank" rel="noreferrer">
+            {part}
+          </a>
+        );
+      })}
+    </p>
+  );
 }
 

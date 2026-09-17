@@ -32,7 +32,7 @@ export async function POST(req: Request) {
         email,
         name: body.name || email.split("@")[0],
         passwordHash: hashPassword(password),
-        appearance: "dark",
+        appearance: "light",
         timezone: "Europe/Amsterdam",
       };
       return state.user;
