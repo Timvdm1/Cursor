@@ -3,7 +3,7 @@ import { currentUser } from "@/lib/session";
 import { mutate } from "@/lib/store";
 import { eventsToMessages, runTurn } from "@/lib/orchestrator";
 import { canHandoff, nextHopCount } from "@/lib/handoffs";
-import { completeOpenAI, resolveModel } from "@/lib/models";
+import { completeChat, resolveModel } from "@/lib/models";
 import { navigate } from "@/lib/computer";
 import type { Message } from "@/lib/types";
 
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     const events = await runTurn({ state, conversationId: convo.id, userText: content, hopCount: 0 });
 
     const model = resolveModel(state, primaryBot?.model);
-    if (model.apiKey && model.model !== "crew-local") {
+    if (model.apiKey && model.provider !== "crew-local") {
       try {
         const history = state.messages
           .filter((m) => m.conversationId === convo.id && m.kind === "text")
@@ -55,12 +55,7 @@ export async function POST(req: Request) {
             content: m.content,
           }));
         const sys = primaryBot?.systemPrompt || "Je bent een Crew-bot.";
-        const llm = await completeOpenAI({
-          apiKey: model.apiKey,
-          baseUrl: model.baseUrl,
-          model: model.model,
-          messages: [{ role: "system", content: sys }, ...history],
-        });
+        const llm = await completeChat(model, [{ role: "system", content: sys }, ...history]);
         if (llm) {
           const lastText = [...events].reverse().find((e) => e.type === "text");
           if (lastText && lastText.type === "text") lastText.text = llm;

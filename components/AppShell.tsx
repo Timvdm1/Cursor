@@ -21,6 +21,7 @@ import { AVATAR_COLORS, AVATAR_SHAPES } from "@/lib/types";
 import { BOT_TEMPLATES } from "@/lib/catalog";
 import { presenceStatus, statusLabel } from "@/lib/status";
 import { InstallCrew } from "./Pwa";
+import { FREE_LLM_PROVIDERS, isFreeLlmProvider } from "@/lib/providers";
 
 type Bootstrap = {
   user: { id: string; email: string; name: string; appearance: string };
@@ -577,7 +578,11 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
             theme={theme}
             onTheme={setTheme}
             onSaveKey={async (provider, secret) => {
-              await j("/api/keys", { method: "POST", body: JSON.stringify({ provider, secret }) });
+              await j("/api/keys", { method: "POST", body: JSON.stringify({ provider, secret, test: true }) });
+              await reload();
+            }}
+            onRemoveKey={async (provider) => {
+              await j(`/api/keys?provider=${encodeURIComponent(provider)}`, { method: "DELETE" });
               await reload();
             }}
             onRule={async (pattern, mode) => {
@@ -904,6 +909,7 @@ function Settings({
   theme,
   onTheme,
   onSaveKey,
+  onRemoveKey,
   onRule,
   onLogout,
 }: {
@@ -912,12 +918,16 @@ function Settings({
   theme: "dark" | "light";
   onTheme: (t: "dark" | "light") => void;
   onSaveKey: (provider: string, secret: string) => Promise<void>;
+  onRemoveKey: (provider: string) => Promise<void>;
   onRule: (pattern: string, mode: "ask_first" | "allow") => Promise<void>;
   onLogout: () => Promise<void>;
 }) {
-  const [provider, setProvider] = useState("openai");
-  const [secret, setSecret] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [keyError, setKeyError] = useState<string | null>(null);
   const [pattern, setPattern] = useState("send_email");
+  const connected = new Map(keys.filter((k) => isFreeLlmProvider(k.provider)).map((k) => [k.provider, k.last4]));
+
   return (
     <div className="settings">
       <h3>Laptop-app</h3>
@@ -931,30 +941,81 @@ function Settings({
           Licht
         </button>
       </div>
-      <h3>Eigen API keys</h3>
-      <p className="muted">Keys worden versleuteld opgeslagen. Nooit plaintext terug.</p>
-      <ul>
-        {keys.map((k) => (
-          <li key={k.provider}>
-            {k.provider}: {k.last4}
-          </li>
-        ))}
-      </ul>
-      <div className="row">
-        <select value={provider} onChange={(e) => setProvider(e.target.value)}>
-          {["openai", "anthropic", "google", "xai", "openrouter", "browserbase", "e2b"].map((p) => (
-            <option key={p}>{p}</option>
-          ))}
-        </select>
-        <input type="password" placeholder="sk-…" value={secret} onChange={(e) => setSecret(e.target.value)} />
-        <button
-          onClick={async () => {
-            await onSaveKey(provider, secret);
-            setSecret("");
-          }}
-        >
-          Opslaan
-        </button>
+      <h3>Gratis model-providers</h3>
+      <p className="muted">
+        Alleen free-tier keys: Cerebras, Mistral, Google Gemini, Groq en OpenRouter. Keys worden versleuteld opgeslagen;
+        we testen de verbinding voordat we opslaan.
+      </p>
+      {keyError && <div className="banner">{keyError}</div>}
+      <div className="provider-list">
+        {FREE_LLM_PROVIDERS.map((p) => {
+          const isOn = connected.has(p.id);
+          return (
+            <div className="provider-row" key={p.id}>
+              <div className="provider-head">
+                <strong>{p.label}</strong>
+                <span className={`pill ${isOn ? "on" : ""}`}>{isOn ? "Verbonden" : "Niet verbonden"}</span>
+              </div>
+              <p className="muted">{p.keyHint}</p>
+              <p className="muted">
+                <a href={p.signupUrl} target="_blank" rel="noreferrer">
+                  Gratis key aanmaken
+                </a>
+                {" · "}
+                model: {p.defaultModel}
+              </p>
+              {!isOn && (
+                <div className="row">
+                  <input
+                    type="password"
+                    placeholder={p.placeholder}
+                    value={drafts[p.id] || ""}
+                    onChange={(e) => setDrafts((d) => ({ ...d, [p.id]: e.target.value }))}
+                  />
+                  <button
+                    disabled={busy === p.id || !(drafts[p.id] || "").trim()}
+                    onClick={async () => {
+                      setKeyError(null);
+                      setBusy(p.id);
+                      try {
+                        await onSaveKey(p.id, drafts[p.id].trim());
+                        setDrafts((d) => ({ ...d, [p.id]: "" }));
+                      } catch (err) {
+                        setKeyError((err as Error).message);
+                      } finally {
+                        setBusy(null);
+                      }
+                    }}
+                  >
+                    {busy === p.id ? "Testen…" : "Verbinden"}
+                  </button>
+                </div>
+              )}
+              {isOn && (
+                <div className="row">
+                  <span className="muted">{connected.get(p.id)}</span>
+                  <button
+                    className="danger"
+                    disabled={busy === p.id}
+                    onClick={async () => {
+                      setKeyError(null);
+                      setBusy(p.id);
+                      try {
+                        await onRemoveKey(p.id);
+                      } catch (err) {
+                        setKeyError((err as Error).message);
+                      } finally {
+                        setBusy(null);
+                      }
+                    }}
+                  >
+                    Verbreken
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
       <h3>Auto-review</h3>
       <ul>

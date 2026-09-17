@@ -1,17 +1,13 @@
+import type { FreeLlmProviderId } from "./providers";
+
 export type BotStatus = "idle" | "thinking" | "working" | "waiting" | "blocked" | "done";
 export type AvatarShape = "stadium" | "squircle" | "capsule" | "diamond" | "hex" | "pill";
 export type Attention = "none" | "unread" | "needs";
 export type ConversationKind = "dm" | "group";
 export type MessageKind = "text" | "event" | "card" | "approval" | "handoff" | "trace";
-export type ProviderId =
-  | "openai"
-  | "anthropic"
-  | "google"
-  | "xai"
-  | "openrouter"
-  | "browserbase"
-  | "e2b"
-  | "gateway";
+
+/** Stored BYOK providers (free tier only). */
+export type ProviderId = FreeLlmProviderId;
 
 export const AVATAR_COLORS = [
   "#2EE6A6",

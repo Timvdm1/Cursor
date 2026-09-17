@@ -221,6 +221,24 @@ button { cursor: pointer; }
 }
 .install-steps strong { display: inline; color: var(--text); }
 .install-card code { font-size: 12px; background: var(--bg); padding: 1px 6px; border-radius: 6px; }
+
+.provider-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.provider-row {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--bg-3);
+}
+.provider-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+.pill {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  background: var(--bg);
+  color: var(--muted);
+}
+.pill.on { background: var(--accent-dim); color: var(--accent); }
+.provider-row a { color: var(--accent); }
 @media (display-mode: standalone), (display-mode: window-controls-overlay) {
   .install-card.banner { display: none; }
 }
