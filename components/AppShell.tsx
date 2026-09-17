@@ -65,11 +65,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
   const [computerLevel, setComputerLevel] = useState<"status" | "preview" | "full">("preview");
   const [error, setError] = useState<string | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
-  const [theme, setTheme] = useState<"system" | "dark" | "light">(
-    initial.user.appearance === "dark" || initial.user.appearance === "system" || initial.user.appearance === "light"
-      ? initial.user.appearance
-      : "light",
-  );
+  const [theme, setTheme] = useState<"system" | "dark" | "light">("light");
   const [systemLight, setSystemLight] = useState(false);
   const [rosterOpen, setRosterOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -1036,7 +1032,10 @@ function ComputerPane({
     <section className={`computer ${full ? "full" : "docked"} ${open || full ? "open" : ""} ${computer.active ? "live" : ""}`}>
       <header className="screen-head">
         <span className="screen-ico" aria-hidden>
-          ⌗
+          <svg viewBox="0 0 24 24" width="18" height="18">
+            <rect x="3" y="5" width="18" height="12" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+            <path d="M8 19h8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
         </span>
         <button className="icon-ghost" onClick={onExpand} aria-label="Expand screen">
           ⛶
