@@ -109,9 +109,9 @@ button { cursor: pointer; }
 .comp-status.on span { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-dim); }
 
 .transcript { flex: 1; overflow: auto; padding: 24px 18% 16px; display: flex; flex-direction: column; gap: 14px; }
-.msg { display: flex; gap: 10px; align-items: flex-end; animation: msg-in 180ms cubic-bezier(.2,.8,.2,1); }
+.msg { display: flex; flex-wrap: nowrap; gap: 10px; align-items: flex-end; animation: msg-in 180ms cubic-bezier(.2,.8,.2,1); }
 .msg.mine { flex-direction: row-reverse; }
-.bubble { max-width: 640px; background: var(--bg-3); border: 1px solid var(--line); border-radius: 16px; padding: 10px 12px; }
+.bubble { max-width: min(640px, calc(100% - 48px)); min-width: 0; background: var(--bg-3); border: 1px solid var(--line); border-radius: 16px; padding: 10px 12px; }
 .msg.mine .bubble { background: #1a1d22; }
 .crew-root.light .msg.mine .bubble { background: #e8eaee; }
 .bubble p { margin: 0; white-space: pre-wrap; }
@@ -353,12 +353,13 @@ button { cursor: pointer; }
   .chat-head { padding: 6px 8px; padding-top: max(8px, env(safe-area-inset-top)); }
   .chat-title.phone-center { display: flex; align-items: center; gap: 8px; justify-content: center; text-align: center; }
   .transcript { padding: 12px 12px 8px; }
+  .msg { align-items: flex-end; }
   .msg.mine .bubble {
     background: #2a2d33;
     border: 0;
     border-radius: 18px 18px 6px 18px;
   }
-  .bubble { border: 0; border-radius: 18px 18px 18px 6px; max-width: 82%; }
+  .bubble { border: 0; border-radius: 18px 18px 18px 6px; max-width: calc(100% - 48px); }
   .composer {
     background: var(--bg);
     border: 0;

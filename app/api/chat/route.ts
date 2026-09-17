@@ -146,9 +146,8 @@ export async function POST(req: Request) {
       convo.lastMessageAt = last.createdAt;
     }
 
-    if (convo.attention === "needs") {
-      convo.workingBotId = undefined;
-    } else if (!state.computer.active) {
+    const usedComputer = events.some((e) => e.type === "computer");
+    if (convo.attention === "needs" || !usedComputer) {
       convo.workingBotId = undefined;
     }
 

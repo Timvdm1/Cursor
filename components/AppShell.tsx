@@ -155,7 +155,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
       const nextConvo = next.conversations.find((c) => c.id === convo.id);
       if (nextConvo?.attention === "needs") {
         setLive({ convoId: convo.id, botId, status: "blocked", action: "Hulp nodig" });
-      } else if (next.computer.active) {
+      } else if (nextConvo?.workingBotId) {
         setLive({
           convoId: convo.id,
           botId,
@@ -184,6 +184,10 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
     setDraft(drafts[id] || "");
     setRosterOpen(false);
     setMobileScreen("chat");
+    setData((d) => ({
+      ...d,
+      conversations: d.conversations.map((c) => (c.id === id ? { ...c, attention: "none" } : c)),
+    }));
     void j("/api/conversations", {
       method: "PATCH",
       body: JSON.stringify({ id, attention: "none" }),
@@ -705,14 +709,16 @@ function MessageView({
         {(message.kind === "text" || !["trace", "handoff", "event", "card", "approval"].includes(message.kind)) && (
           <p>{message.content}</p>
         )}
-        <div className="react">
-          {["👍", "👀", "✅"].map((e) => (
-            <button key={e} onClick={() => onReact(e)}>
-              {e}
-              {message.reactions?.[e] ? ` ${message.reactions[e]}` : ""}
-            </button>
-          ))}
-        </div>
+        {!mine && (
+          <div className="react">
+            {["👍", "👀", "✅"].map((e) => (
+              <button key={e} onClick={() => onReact(e)}>
+                {e}
+                {message.reactions?.[e] ? ` ${message.reactions[e]}` : ""}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </article>
   );
