@@ -49,6 +49,7 @@ export async function POST(req: Request) {
         last4: maskKey(last4(secret)),
         model: test.model,
         label: providerMeta(provider).label,
+        rateLimited: Boolean(test.rateLimited),
       });
     } catch (err) {
       return NextResponse.json(

@@ -113,10 +113,25 @@ function isRetryableModelError(message: string): boolean {
   );
 }
 
+function isRateLimitError(message: string): boolean {
+  return /429|rate limit|too many requests|rate_limited|resource.?exhausted|quota/i.test(message);
+}
+
+function isAuthFailure(status: number, body: string): boolean {
+  if (status === 401 || status === 403) return true;
+  return /invalid api key|api[_ ]key[_ ]invalid|incorrect api key|unauthorized|authentication|permission_denied/i.test(
+    body,
+  );
+}
+
 function formatHttpError(status: number, body: string): string {
   const clipped = body.replace(/\s+/g, " ").trim().slice(0, 280);
   try {
-    const json = JSON.parse(body) as { error?: { message?: string } | string; message?: string };
+    const json = JSON.parse(body) as {
+      error?: { message?: string; code?: number | string; status?: string } | string;
+      message?: string;
+      type?: string;
+    };
     const msg =
       typeof json.error === "string"
         ? json.error
@@ -126,6 +141,47 @@ function formatHttpError(status: number, body: string): string {
     /* raw body */
   }
   return `${status}: ${clipped || "provider error"}`;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, ms));
+}
+
+export function authHeaders(provider: FreeLlmProviderId, apiKey: string): Record<string, string> {
+  if (provider === "openrouter") {
+    return {
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": process.env.CREW_PUBLIC_URL || "https://crew.app",
+      "X-Title": "Crew",
+    };
+  }
+  return { Authorization: `Bearer ${apiKey}` };
+}
+
+/** Cheap key check: list models. 429 means the key is valid but the free tier is busy. */
+export async function verifyApiKey(
+  provider: FreeLlmProviderId,
+  apiKey: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<{ ok: true; model: string; rateLimited?: boolean }> {
+  const meta = providerMeta(provider);
+  const url =
+    provider === "google"
+      ? `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`
+      : `${(meta.baseUrl || "").replace(/\/$/, "")}/models`;
+  const res = await fetchImpl(url, {
+    method: "GET",
+    headers: provider === "google" ? { "Content-Type": "application/json" } : authHeaders(provider, apiKey),
+  });
+  const body = await res.text();
+  if (res.ok) return { ok: true, model: meta.defaultModel };
+  if (res.status === 429 || isRateLimitError(body)) {
+    return { ok: true, model: meta.defaultModel, rateLimited: true };
+  }
+  if (isAuthFailure(res.status, body)) {
+    throw new Error(`${meta.label} rejected this key. Check it in their dashboard and try again.`);
+  }
+  throw new Error(formatHttpError(res.status, body));
 }
 
 export async function completeChat(
@@ -140,32 +196,39 @@ export async function completeChat(
   const models = modelsFor(provider, resolved.model);
   let lastError = "Provider returned an empty reply.";
   for (const model of models) {
-    try {
-      const text =
-        provider === "google"
-          ? await completeGemini(resolved.apiKey, model, messages, fetchImpl)
-          : await completeOpenAICompatible({
-              apiKey: resolved.apiKey,
-              baseUrl: resolved.baseUrl || providerMeta(provider).baseUrl,
-              model,
-              messages,
-              extraHeaders:
-                provider === "openrouter"
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const extraHeaders = provider === "openrouter" ? authHeaders(provider, resolved.apiKey) : undefined;
+        const text =
+          provider === "google"
+            ? await completeGemini(resolved.apiKey, model, messages, fetchImpl)
+            : await completeOpenAICompatible({
+                apiKey: resolved.apiKey,
+                baseUrl: resolved.baseUrl || providerMeta(provider).baseUrl,
+                model,
+                messages,
+                extraHeaders: extraHeaders
                   ? {
-                      "HTTP-Referer": process.env.CREW_PUBLIC_URL || "https://crew.app",
-                      "X-Title": "Crew",
+                      "HTTP-Referer": extraHeaders["HTTP-Referer"],
+                      "X-Title": extraHeaders["X-Title"],
                     }
                   : undefined,
-              fetchImpl,
-            });
-      if (!text.trim()) {
-        lastError = `${providerMeta(provider).label} returned an empty reply.`;
-        continue;
+                fetchImpl,
+              });
+        if (!text.trim()) {
+          lastError = `${providerMeta(provider).label} returned an empty reply.`;
+          break;
+        }
+        return { text: text.trim(), model, provider };
+      } catch (err) {
+        lastError = (err as Error).message;
+        if (isRateLimitError(lastError) && attempt < 2) {
+          await sleep(500 * 2 ** attempt);
+          continue;
+        }
+        if (isRetryableModelError(lastError)) break;
+        throw new Error(`${providerMeta(provider).label} failed: ${lastError}`);
       }
-      return { text: text.trim(), model, provider };
-    } catch (err) {
-      lastError = (err as Error).message;
-      if (!isRetryableModelError(lastError)) break;
     }
   }
   throw new Error(`${providerMeta(provider).label} failed: ${lastError}`);
@@ -262,15 +325,12 @@ export async function testProviderConnection(
   provider: FreeLlmProviderId,
   apiKey: string,
   fetchImpl: FetchLike = fetch,
-): Promise<{ ok: true; sample: string; model: string }> {
-  const meta = providerMeta(provider);
-  const completion = await completeChat(
-    { provider, model: meta.defaultModel, apiKey, baseUrl: meta.baseUrl },
-    [
-      { role: "system", content: "Reply with exactly one short word." },
-      { role: "user", content: "Say: connected" },
-    ],
-    fetchImpl,
-  );
-  return { ok: true, sample: completion.text.slice(0, 120), model: completion.model };
+): Promise<{ ok: true; sample: string; model: string; rateLimited?: boolean }> {
+  const verified = await verifyApiKey(provider, apiKey, fetchImpl);
+  return {
+    ok: true,
+    sample: verified.rateLimited ? "connected (rate limited)" : "connected",
+    model: verified.model,
+    rateLimited: verified.rateLimited,
+  };
 }

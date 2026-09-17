@@ -451,8 +451,9 @@ function UsagePane({
       </Section>
       <Section title="Connected providers">
         <p className="muted">
-          Free-tier providers only. Crew tests the key, encrypts it, then uses it for every chat.
-          The most recently connected key is the one Bots reply with.
+          Free-tier providers only. Crew checks the key against the provider (a rate limit still counts as
+          connected), encrypts it, then uses it for chat. The most recently connected key is the one Bots
+          reply with.
         </p>
         <ProviderKeys keys={keys} activeProvider={activeLlm?.provider} onSaveKey={onSaveKey} onRemoveKey={onRemoveKey} />
       </Section>

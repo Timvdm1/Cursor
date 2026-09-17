@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { encryptSecret } from "./crypto";
-import { applyLlmToEvents, applyProviderError, chatHistory, completeChat, resolveModel } from "./models";
+import { applyLlmToEvents, applyProviderError, chatHistory, completeChat, resolveModel, verifyApiKey } from "./models";
 import { emptyState } from "./seed";
 import type { Message } from "./types";
 
@@ -80,6 +80,30 @@ describe("completeChat", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it("retries a rate limit then returns the reply", async () => {
+    let n = 0;
+    const fetchImpl = vi.fn(async () => {
+      n += 1;
+      if (n === 1) {
+        return new Response(JSON.stringify({ message: "Rate limit exceeded", type: "rate_limited" }), { status: 429 });
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: "ok after wait" } }] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const out = await completeChat(
+      {
+        provider: "mistral",
+        model: "mistral-small-latest",
+        apiKey: "ms_test",
+        baseUrl: "https://api.mistral.ai/v1",
+      },
+      [{ role: "user", content: "hi" }],
+      fetchImpl,
+    );
+    expect(out.text).toBe("ok after wait");
+    expect(out.provider).toBe("mistral");
+    expect(n).toBe(2);
+  });
+
   it("does not swallow a non-model provider error", async () => {
     const fetchImpl = vi.fn(
       async () => new Response(JSON.stringify({ error: { message: "Invalid API key" } }), { status: 401 }),
@@ -92,6 +116,41 @@ describe("completeChat", () => {
       ),
     ).rejects.toThrow(/Invalid API key/);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("verifyApiKey", () => {
+  it("treats a 429 on /models as a valid key for every provider", async () => {
+    const urls: string[] = [];
+    const fetchImpl = vi.fn(async (url: string) => {
+      urls.push(String(url));
+      return new Response(JSON.stringify({ message: "Rate limit exceeded" }), { status: 429 });
+    }) as unknown as typeof fetch;
+    for (const id of ["cerebras", "mistral", "google", "groq", "openrouter"] as const) {
+      const out = await verifyApiKey(id, "test-key", fetchImpl);
+      expect(out.ok).toBe(true);
+      expect(out.rateLimited).toBe(true);
+    }
+    expect(urls.some((u) => u.includes("/chat/completions"))).toBe(false);
+    expect(urls.filter((u) => u.includes("/models")).length).toBe(5);
+    expect(urls.some((u) => u.includes("generativelanguage.googleapis.com"))).toBe(true);
+    expect(urls.some((u) => u.includes("api.mistral.ai"))).toBe(true);
+  });
+
+  it("rejects an invalid key", async () => {
+    const fetchImpl = vi.fn(
+      async () => new Response(JSON.stringify({ message: "Unauthorized" }), { status: 401 }),
+    ) as unknown as typeof fetch;
+    await expect(verifyApiKey("mistral", "bad", fetchImpl)).rejects.toThrow(/rejected this key/i);
+  });
+
+  it("accepts a 200 models list", async () => {
+    const fetchImpl = vi.fn(
+      async () => new Response(JSON.stringify({ data: [{ id: "mistral-small-latest" }] }), { status: 200 }),
+    ) as unknown as typeof fetch;
+    const out = await verifyApiKey("mistral", "ok", fetchImpl);
+    expect(out.ok).toBe(true);
+    expect(out.rateLimited).toBeFalsy();
   });
 });
 
