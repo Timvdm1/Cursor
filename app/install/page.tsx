@@ -8,11 +8,11 @@ export default function InstallPage() {
           <span className="brand-mark" />
           Crew
         </div>
-        <h1>Crew als laptop-app</h1>
-        <p className="muted">Zelfde product, eigen venster — zoals een normale desktop-app.</p>
+        <h1>Crew as a laptop app</h1>
+        <p className="muted">Same product, own window — like a normal desktop app.</p>
         <InstallCrew variant="page" />
         <p className="muted" style={{ marginTop: 16 }}>
-          <a href="/login">Terug naar login</a>
+          <a href="/login">Back to sign in</a>
         </p>
       </div>
     </div>

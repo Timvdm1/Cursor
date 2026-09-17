@@ -29,12 +29,14 @@ export function emptyState(): CrewState {
     computer: {
       active: false,
       url: "crew://desktop",
-      title: "Crew Computer",
+      title: "Agent Computer",
       status: "Idle",
       cursor: { x: 48, y: 64 },
       logs: [],
       takeover: false,
       wallpaperHour: new Date().getHours(),
+      localExecution: "ask",
+      localEgress: false,
     },
     memories: [],
   };

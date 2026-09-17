@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const body = (await req.json()) as { email?: string; password?: string; name?: string; mode?: string };
   const email = (body.email || "").trim().toLowerCase();
   const password = body.password || "";
-  if (!email || !password) return NextResponse.json({ error: "Email en wachtwoord verplicht" }, { status: 400 });
+  if (!email || !password) return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
 
   const user = await mutate((state) => {
     if (body.mode === "register") {
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     return state.user;
   });
 
-  if (!user) return NextResponse.json({ error: "Onjuiste login. Probeer demo@crew.app / crew" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Incorrect login. Try demo@crew.app / crew" }, { status: 401 });
 
   const jar = await cookies();
   jar.set(SESSION_COOKIE, user.id, {
@@ -58,4 +58,25 @@ export async function DELETE() {
   const jar = await cookies();
   jar.delete(SESSION_COOKIE);
   return NextResponse.json({ ok: true });
+}
+
+export async function PATCH(req: Request) {
+  const jar = await cookies();
+  const token = jar.get(SESSION_COOKIE)?.value;
+  const body = (await req.json()) as {
+    appearance?: "system" | "light" | "dark";
+    timezone?: string;
+    name?: string;
+  };
+  const user = await mutate((state) => {
+    if (!state.user || token !== state.user.id) return null;
+    if (body.appearance) state.user.appearance = body.appearance;
+    if (body.timezone) state.user.timezone = body.timezone;
+    if (body.name) state.user.name = body.name;
+    return state.user;
+  });
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  return NextResponse.json({
+    user: { id: user.id, email: user.email, name: user.name, appearance: user.appearance, timezone: user.timezone },
+  });
 }

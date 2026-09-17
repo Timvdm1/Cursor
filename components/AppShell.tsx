@@ -20,11 +20,10 @@ import type {
 import { AVATAR_COLORS, AVATAR_SHAPES } from "@/lib/types";
 import { BOT_TEMPLATES } from "@/lib/catalog";
 import { presenceStatus, statusLabel } from "@/lib/status";
-import { InstallCrew } from "./Pwa";
-import { FREE_LLM_PROVIDERS, isFreeLlmProvider } from "@/lib/providers";
+import { SettingsPanel, type SettingsTab } from "./SettingsPanel";
 
 type Bootstrap = {
-  user: { id: string; email: string; name: string; appearance: string };
+  user: { id: string; email: string; name: string; appearance: string; timezone?: string };
   bots: Bot[];
   conversations: Conversation[];
   messages: Message[];
@@ -39,7 +38,7 @@ type Bootstrap = {
   keys: { provider: string; last4: string }[];
 };
 
-type Overlay = "none" | "market" | "settings" | "newbot" | "newgroup" | "palette";
+type Overlay = "none" | "market" | "settings" | "newbot" | "newgroup" | "palette" | "agent";
 
 async function j<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -64,9 +63,14 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
   const [slashOpen, setSlashOpen] = useState(false);
   const [computerLevel, setComputerLevel] = useState<"status" | "preview" | "full">("status");
   const [error, setError] = useState<string | null>(null);
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<"system" | "dark" | "light">(
+    initial.user.appearance === "light" || initial.user.appearance === "system" ? initial.user.appearance : "dark",
+  );
+  const [systemLight, setSystemLight] = useState(false);
   const [rosterOpen, setRosterOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [mobileScreen, setMobileScreen] = useState<"home" | "chat">("home");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [live, setLive] = useState<{ convoId: string; botId: string; status: BotStatus; action: string } | null>(null);
@@ -98,9 +102,11 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
   }, [messages.length, busy, pending]);
 
   useEffect(() => {
-    return () => {
-      if (liveTimer.current) window.clearTimeout(liveTimer.current);
-    };
+    const mq = window.matchMedia("(prefers-color-scheme: light)");
+    const apply = () => setSystemLight(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
   }, []);
 
   useEffect(() => {
@@ -108,6 +114,15 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setOverlay((o) => (o === "palette" ? "none" : "palette"));
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
+        e.preventDefault();
+        setSettingsTab("general");
+        setOverlay((o) => (o === "settings" ? "none" : "settings"));
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        setOverlay("newbot");
       }
       if (e.key === "Escape") setOverlay("none");
     };
@@ -138,12 +153,12 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
       content,
       createdAt: new Date().toISOString(),
     });
-    setLive({ convoId: convo.id, botId, status: "thinking", action: "Leest je bericht" });
+    setLive({ convoId: convo.id, botId, status: "thinking", action: "Reading your message" });
     if (liveTimer.current) window.clearTimeout(liveTimer.current);
     liveTimer.current = window.setTimeout(() => {
       setLive((cur) =>
         cur && cur.convoId === convo.id && cur.status === "thinking"
-          ? { ...cur, status: "working", action: "Aan het werk" }
+          ? { ...cur, status: "working", action: "Working" }
           : cur,
       );
     }, 420);
@@ -156,16 +171,16 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
       setPending(null);
       const nextConvo = next.conversations.find((c) => c.id === convo.id);
       if (nextConvo?.attention === "needs") {
-        setLive({ convoId: convo.id, botId, status: "blocked", action: "Hulp nodig" });
+        setLive({ convoId: convo.id, botId, status: "blocked", action: "Needs attention" });
       } else if (nextConvo?.workingBotId) {
         setLive({
           convoId: convo.id,
           botId,
           status: "working",
-          action: next.computer.status || "Computer",
+          action: next.computer.status || "Working",
         });
       } else {
-        setLive({ convoId: convo.id, botId, status: "done", action: "Klaar" });
+        setLive({ convoId: convo.id, botId, status: "done", action: "Done" });
         liveTimer.current = window.setTimeout(() => {
           setLive((cur) => (cur && cur.status === "done" ? null : cur));
         }, 700);
@@ -174,7 +189,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
       setError((err as Error).message);
       setDraft(content);
       setPending(null);
-      setLive({ convoId: convo.id, botId, status: "blocked", action: "Mislukt" });
+      setLive({ convoId: convo.id, botId, status: "blocked", action: "Failed" });
     } finally {
       setBusy(false);
     }
@@ -201,6 +216,28 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
     setMobileScreen("home");
     setComputerLevel("status");
     setMoreOpen(false);
+    setAccountOpen(false);
+  }
+
+  function openSettings(tab: SettingsTab = "general") {
+    setSettingsTab(tab);
+    setOverlay("settings");
+    setMoreOpen(false);
+    setAccountOpen(false);
+  }
+
+  async function signOut() {
+    await j("/api/session", { method: "DELETE" });
+    window.location.reload();
+  }
+
+  function markConversation(attention: "none" | "unread") {
+    if (!convo) return;
+    void j("/api/conversations", { method: "PATCH", body: JSON.stringify({ id: convo.id, attention }) });
+    setData((d) => ({
+      ...d,
+      conversations: d.conversations.map((c) => (c.id === convo.id ? { ...c, attention } : c)),
+    }));
   }
 
   function onDraft(value: string) {
@@ -211,33 +248,34 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
     setSlashOpen(Boolean(sl));
   }
 
+  const resolvedTheme = theme === "light" || (theme === "system" && systemLight) ? "light" : "dark";
   const hour = new Date().getHours();
-  const wallpaper = `radial-gradient(1200px 600px at 20% 10%, hsl(${200 + hour * 4} 40% ${theme === "dark" ? 18 : 72}%), transparent),
-    linear-gradient(180deg, hsl(${210 + hour} 28% ${theme === "dark" ? 10 : 86}%), hsl(${230} 30% ${theme === "dark" ? 6 : 92}%))`;
+  const wallpaper = `radial-gradient(1200px 600px at 20% 10%, hsl(${200 + hour * 4} 40% ${resolvedTheme === "dark" ? 18 : 72}%), transparent),
+    linear-gradient(180deg, hsl(${210 + hour} 28% ${resolvedTheme === "dark" ? 10 : 86}%), hsl(${230} 30% ${resolvedTheme === "dark" ? 6 : 92}%))`;
 
   return (
-    <div className={`crew-root ${theme} phone-${mobileScreen} ${rosterOpen ? "roster-open" : ""} ${draft.trim() ? "has-draft" : ""}`}>
-      {rosterOpen && <button className="scrim" aria-label="Sluit lijst" onClick={() => setRosterOpen(false)} />}
+    <div className={`crew-root ${resolvedTheme} phone-${mobileScreen} ${rosterOpen ? "roster-open" : ""} ${draft.trim() ? "has-draft" : ""}`}>
+      {rosterOpen && <button className="scrim" aria-label="Close sidebar" onClick={() => setRosterOpen(false)} />}
       <aside className={`roster ${rosterOpen ? "open" : ""}`}>
         <header className="roster-head desk-bar">
           <div className="brand">
             <span className="brand-mark" />
             Crew
           </div>
-          <button className="ghost" onClick={() => setOverlay("palette")} title="Zoeken">
-            Zoek
+          <button className="ghost" onClick={() => setOverlay("palette")} title="Search">
+            Search
           </button>
         </header>
         <header className="ios-home-head">
           <h1>Crew</h1>
           <div className="ios-home-actions">
-            <button className="icon-round" aria-label="Zoeken" onClick={() => setOverlay("palette")}>
+            <button className="icon-round" aria-label="Search" onClick={() => setOverlay("palette")}>
               ⌕
             </button>
-            <button className="icon-round" aria-label="Instellingen" onClick={() => setOverlay("settings")}>
+            <button className="icon-round" aria-label="Settings" onClick={() => openSettings("general")}>
               ⚙
             </button>
-            <button className="icon-round plus" aria-label="Nieuw" onClick={() => setMoreOpen((v) => !v)}>
+            <button className="icon-round plus" aria-label="New" onClick={() => setMoreOpen((v) => !v)}>
               +
             </button>
           </div>
@@ -250,7 +288,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
                 setMoreOpen(false);
               }}
             >
-              Nieuwe bot
+              Create new agent
             </button>
             <button
               onClick={() => {
@@ -258,7 +296,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
                 setMoreOpen(false);
               }}
             >
-              Nieuwe groep
+              New group
             </button>
             <button
               onClick={() => {
@@ -271,7 +309,9 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
           </div>
         )}
         <div className="roster-list">
-          {data.conversations.map((c) => {
+          {data.conversations
+            .filter((c) => c.botIds.some((id) => data.bots.some((b) => b.id === id)))
+            .map((c) => {
             const bot = data.bots.find((b) => b.id === c.botIds[0]);
             const status = presenceOf(c);
             return (
@@ -305,17 +345,40 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
           })}
         </div>
         <footer className="roster-foot">
-          <button onClick={() => setOverlay("newbot")}>Nieuwe bot</button>
-          <button onClick={() => setOverlay("newgroup")}>Nieuwe groep</button>
+          <button onClick={() => setOverlay("newbot")}>Create new agent</button>
+          <button onClick={() => setOverlay("newgroup")}>New group</button>
+          <div className="account-menu">
+            <button
+              className="account-chip"
+              aria-label="Account menu"
+              onClick={() => setAccountOpen((v) => !v)}
+            >
+              <span className="account-dot" />
+              {data.user.name}
+            </button>
+            {accountOpen && (
+              <div className="account-pop">
+                <p className="account-about">
+                  About Crew
+                  <em>Version 0.1.0</em>
+                </p>
+                <button onClick={() => openSettings("usage")}>Weekly usage</button>
+                <button onClick={() => openSettings("general")}>Settings</button>
+                <button className="danger" onClick={() => void signOut()}>
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
         </footer>
       </aside>
 
       <main className="chat">
         <header className="chat-head">
-          <button className="menu-btn" aria-label="Terug" onClick={backHome}>
+          <button className="menu-btn" aria-label="Back" onClick={backHome}>
             ‹
           </button>
-          <div className="chat-title phone-center">
+          <div className="chat-title phone-center" onClick={() => setOverlay("agent")} role="button">
             {convo?.kind !== "group" && data.bots.find((b) => b.id === convo?.botIds[0]) && (
               <Avatar
                 color={data.bots.find((b) => b.id === convo?.botIds[0])!.color}
@@ -343,22 +406,28 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
             <button
               className={`comp-status ${working ? "on" : ""}`}
               onClick={() => setComputerLevel((l) => (l === "preview" ? "status" : "preview"))}
-              title="Computer"
+              title="Agent Computer"
             >
               <span />
-              <em className="desk-label">Computer</em>
+              <em className="desk-label">Agent Computer</em>
             </button>
             <button className="ghost desk-only" onClick={() => setComputerLevel("full")}>
-              Takeover
+              Take control
             </button>
             <button className="ghost desk-only" onClick={() => setOverlay("market")}>
               Marketplace
             </button>
-            <button className="ghost desk-only" onClick={() => setOverlay("settings")}>
-              Instellingen
+            <button
+              className="ghost desk-only"
+              onClick={() => setOverlay("agent")}
+            >
+              Agent settings
+            </button>
+            <button className="ghost desk-only" onClick={() => openSettings("general")}>
+              Settings
             </button>
             <div className="more">
-              <button className="ghost more-btn" aria-label="Meer" onClick={() => setMoreOpen((v) => !v)}>
+              <button className="ghost more-btn" aria-label="More" onClick={() => setMoreOpen((v) => !v)}>
                 ⋯
               </button>
               {moreOpen && (
@@ -369,7 +438,15 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
                       setMoreOpen(false);
                     }}
                   >
-                    Takeover
+                    Take control
+                  </button>
+                  <button
+                    onClick={() => {
+                      setOverlay("agent");
+                      setMoreOpen(false);
+                    }}
+                  >
+                    View conversation details
                   </button>
                   <button
                     onClick={() => {
@@ -381,11 +458,18 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
                   </button>
                   <button
                     onClick={() => {
-                      setOverlay("settings");
+                      markConversation(convo?.attention === "unread" ? "none" : "unread");
                       setMoreOpen(false);
                     }}
                   >
-                    Instellingen
+                    {convo?.attention === "unread" ? "Mark as read" : "Mark as unread"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      openSettings("general");
+                    }}
+                  >
+                    Settings
                   </button>
                 </div>
               )}
@@ -440,7 +524,19 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
           )}
         </div>
 
-        {error && <div className="banner">{error}</div>}
+        {error && (
+          <div className="notice-stack">
+            <div className="notice-head">Notifications</div>
+            <div className="banner notice">
+              <p>{error}</p>
+              <div className="row">
+                <button type="button" onClick={() => setError(null)}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="composer-wrap">
           {mentionOpen && (
@@ -484,12 +580,12 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
               void send();
             }}
           >
-            <button type="button" className="icon" title="Bijlage" onClick={() => setDraft((d) => d + " [/workspace] ")}>
+            <button type="button" className="icon" title="Attachment" onClick={() => setDraft((d) => d + " [/workspace] ")}>
               +
             </button>
             <textarea
               value={draft}
-                  placeholder={convo ? `Bericht ${convo.title}` : "Bericht"}
+              placeholder={convo ? `Message ${convo.title}` : "Message"}
               onChange={(e) => onDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -513,11 +609,11 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
                 };
                 const SR = w.webkitSpeechRecognition;
                 if (!SR) {
-                  setError("Spraak niet beschikbaar in deze browser");
+                  setError("Speech is not available in this browser");
                   return;
                 }
                 const rec = new SR();
-                rec.lang = "nl-NL";
+                rec.lang = "en-US";
                 rec.onresult = (ev) => {
                   const t = ev.results[0][0].transcript;
                   setDraft((d) => `${d} ${t}`.trim());
@@ -571,12 +667,29 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
       )}
 
       {overlay === "settings" && (
-        <Modal title="Instellingen" onClose={() => setOverlay("none")}>
-          <Settings
+        <Modal title="Settings" wide onClose={() => setOverlay("none")}>
+          <SettingsPanel
+            user={{
+              email: data.user.email,
+              name: data.user.name,
+              timezone: data.user.timezone || "Europe/Amsterdam",
+            }}
             keys={data.keys}
             rules={data.autoReviewRules}
-            theme={theme}
-            onTheme={setTheme}
+            computer={data.computer}
+            plugins={data.plugins}
+            installs={data.installs}
+            appearance={theme}
+            initialTab={settingsTab}
+            onAppearance={async (t) => {
+              setTheme(t);
+              await j("/api/session", { method: "PATCH", body: JSON.stringify({ appearance: t }) });
+              await reload();
+            }}
+            onTimezone={async (tz) => {
+              await j("/api/session", { method: "PATCH", body: JSON.stringify({ timezone: tz }) });
+              await reload();
+            }}
             onSaveKey={async (provider, secret) => {
               await j("/api/keys", { method: "POST", body: JSON.stringify({ provider, secret, test: true }) });
               await reload();
@@ -589,16 +702,47 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
               await j("/api/approvals", { method: "PUT", body: JSON.stringify({ pattern, mode }) });
               await reload();
             }}
+            onDeleteRule={async (id) => {
+              await j("/api/approvals", { method: "PUT", body: JSON.stringify({ id, delete: true }) });
+              await reload();
+            }}
+            onLocalExecution={async (mode) => {
+              await j("/api/computer", { method: "POST", body: JSON.stringify({ action: "localExecution", localExecution: mode }) });
+              await reload();
+            }}
+            onLocalEgress={async (on) => {
+              await j("/api/computer", { method: "POST", body: JSON.stringify({ action: "localEgress", localEgress: on }) });
+              await reload();
+            }}
+            onUpdateComputer={async () => {
+              await j("/api/computer", { method: "POST", body: JSON.stringify({ action: "updateComputer" }) });
+              await reload();
+            }}
+            onResetComputer={async () => {
+              await j("/api/computer", { method: "POST", body: JSON.stringify({ action: "resetComputer" }) });
+              await reload();
+            }}
+            onInstallPlugin={async (pluginId) => {
+              await j("/api/marketplace", { method: "POST", body: JSON.stringify({ pluginId }) });
+              await reload();
+            }}
+            onTemplate={async (templateId) => {
+              await j("/api/marketplace", { method: "POST", body: JSON.stringify({ templateId }) });
+              await reload();
+            }}
+            onTools={async (pluginId, enabledTools, connected) => {
+              await j("/api/marketplace", { method: "POST", body: JSON.stringify({ pluginId, enabledTools, connected }) });
+              await reload();
+            }}
             onLogout={async () => {
-              await j("/api/session", { method: "DELETE" });
-              window.location.reload();
+              await signOut();
             }}
           />
         </Modal>
       )}
 
       {overlay === "newbot" && (
-        <Modal title="Nieuwe bot" onClose={() => setOverlay("none")}>
+        <Modal title="Create new agent" onClose={() => setOverlay("none")}>
           <NewBot
             onCreate={async (payload) => {
               const res = await j<{ bot: Bot }>("/api/bots", { method: "POST", body: JSON.stringify(payload) });
@@ -611,7 +755,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
       )}
 
       {overlay === "newgroup" && (
-        <Modal title="Nieuwe groep" onClose={() => setOverlay("none")}>
+        <Modal title="New group" onClose={() => setOverlay("none")}>
           <NewGroup
             bots={data.bots}
             onCreate={async (botIds, title) => {
@@ -628,12 +772,38 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
         </Modal>
       )}
 
+      {overlay === "agent" && convo && (
+        <Modal title="Conversation details" onClose={() => setOverlay("none")}>
+          <AgentSettings
+            convo={convo}
+            bots={data.bots}
+            onSave={async (botId, patch) => {
+              await j("/api/bots", { method: "PATCH", body: JSON.stringify({ id: botId, ...patch }) });
+              await reload();
+            }}
+            onHide={async (botId) => {
+              await j("/api/bots", { method: "PATCH", body: JSON.stringify({ id: botId, hidden: true }) });
+              await reload();
+              setOverlay("none");
+              setMobileScreen("home");
+            }}
+            onMark={(attention) => {
+              void j("/api/conversations", { method: "PATCH", body: JSON.stringify({ id: convo.id, attention }) });
+              setData((d) => ({
+                ...d,
+                conversations: d.conversations.map((c) => (c.id === convo.id ? { ...c, attention } : c)),
+              }));
+            }}
+          />
+        </Modal>
+      )}
+
       {overlay === "palette" && (
-        <Modal title="Zoeken" onClose={() => setOverlay("none")}>
+        <Modal title="Search" onClose={() => setOverlay("none")}>
           <input
             className="full"
             autoFocus
-            placeholder="Bots, berichten, files, skills…"
+            placeholder="Bots, messages, files, skills…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -683,8 +853,8 @@ function MessageView({
         {message.kind === "event" && <div className="event">{message.content}</div>}
         {message.kind === "card" && message.card?.type === "email" && (
           <div className="card">
-            <strong>Nieuwe e-mail</strong>
-            <p>Aan {String(message.card.to)}</p>
+            <strong>New email</strong>
+            <p>To {String(message.card.to)}</p>
             <p>{String(message.card.subject)}</p>
             <pre>{String(message.card.body)}</pre>
           </div>
@@ -699,7 +869,7 @@ function MessageView({
         )}
         {message.kind === "approval" && (
           <div className="card">
-            <strong>Goedkeuring</strong>
+            <strong>Approval</strong>
             <p>{message.content}</p>
             {pending && (
               <div className="row">
@@ -759,7 +929,7 @@ function ComputerPane({
           <i />
           <i />
         </span>
-        <strong>{computer.takeover ? "Jij bestuurt" : "Crew Computer"}</strong>
+        <strong>{computer.takeover ? "You have control" : "Agent Computer"}</strong>
         <button onClick={onExpand}>⛶</button>
         <button onClick={onClose}>×</button>
       </header>
@@ -786,7 +956,9 @@ function ComputerPane({
                 <li key={i}>{l}</li>
               ))}
             </ul>
-            {computer.takeover && <p className="warn">Gevoelige stap — voltooi login/2FA hier, plak geen codes in chat.</p>}
+            {computer.takeover && (
+              <p className="warn">Sensitive step — finish login or 2FA here. Don’t paste codes in chat.</p>
+            )}
           </div>
           <span className="cursor" style={{ left: `${computer.cursor.x}%`, top: `${computer.cursor.y}%` }} />
         </div>
@@ -798,7 +970,15 @@ function ComputerPane({
             await onRefresh();
           }}
         >
-          {computer.takeover ? "Teruggeven" : "Overnemen"}
+          {computer.takeover ? "Return control" : "Take control"}
+        </button>
+        <button
+          onClick={async () => {
+            await j("/api/computer", { method: "POST", body: JSON.stringify({ action: "updateComputer" }) });
+            await onRefresh();
+          }}
+        >
+          Recover computer
         </button>
         <form
           onSubmit={async (e) => {
@@ -827,10 +1007,20 @@ function ComputerPane({
   );
 }
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function Modal({
+  title,
+  onClose,
+  children,
+  wide,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
   return (
     <div className="modal-bg" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className={`modal ${wide ? "wide" : ""}`} onClick={(e) => e.stopPropagation()}>
         <header>
           <h2>{title}</h2>
           <button onClick={onClose}>×</button>
@@ -859,10 +1049,10 @@ function Marketplace({
     <div>
       <div className="tabs">
         <button className={tab === "plugins" ? "on" : ""} onClick={() => setTab("plugins")}>
-          Plugins
+          Marketplace
         </button>
         <button className={tab === "bots" ? "on" : ""} onClick={() => setTab("bots")}>
-          Bots
+          Yours
         </button>
       </div>
       {tab === "plugins" &&
@@ -881,10 +1071,10 @@ function Marketplace({
                     checked={inst.connected}
                     onChange={(e) => void onTools(p.id, inst.enabledTools, e.target.checked)}
                   />
-                  aan
+                  Connected
                 </label>
               ) : (
-                <button onClick={() => void onInstall(p.id)}>Install</button>
+                <button onClick={() => void onInstall(p.id)}>Add</button>
               )}
             </div>
           );
@@ -896,143 +1086,129 @@ function Marketplace({
               <strong>{t.name}</strong>
               <p>{t.description}</p>
             </div>
-            <button onClick={() => void onTemplate(t.id)}>Toevoegen</button>
+            <button onClick={() => void onTemplate(t.id)}>Add to Crew</button>
           </div>
         ))}
     </div>
   );
 }
 
-function Settings({
-  keys,
-  rules,
-  theme,
-  onTheme,
-  onSaveKey,
-  onRemoveKey,
-  onRule,
-  onLogout,
+function AgentSettings({
+  convo,
+  bots,
+  onSave,
+  onHide,
+  onMark,
 }: {
-  keys: { provider: string; last4: string }[];
-  rules: AutoReviewRule[];
-  theme: "dark" | "light";
-  onTheme: (t: "dark" | "light") => void;
-  onSaveKey: (provider: string, secret: string) => Promise<void>;
-  onRemoveKey: (provider: string) => Promise<void>;
-  onRule: (pattern: string, mode: "ask_first" | "allow") => Promise<void>;
-  onLogout: () => Promise<void>;
+  convo: Conversation;
+  bots: Bot[];
+  onSave: (
+    id: string,
+    patch: {
+      name?: string;
+      title?: string;
+      description?: string;
+      notifications?: boolean;
+      color?: string;
+      shape?: AvatarShape;
+    },
+  ) => Promise<void>;
+  onHide: (id: string) => Promise<void>;
+  onMark: (attention: "none" | "unread") => void;
 }) {
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<string | null>(null);
-  const [keyError, setKeyError] = useState<string | null>(null);
-  const [pattern, setPattern] = useState("send_email");
-  const connected = new Map(keys.filter((k) => isFreeLlmProvider(k.provider)).map((k) => [k.provider, k.last4]));
-
+  const primary = bots.find((b) => b.id === convo.botIds[0]);
+  const [name, setName] = useState(primary?.name || convo.title);
+  const [title, setTitle] = useState(primary?.title || "");
+  const [description, setDescription] = useState(primary?.description || "");
+  const [color, setColor] = useState(primary?.color || AVATAR_COLORS[0]);
+  const [shape, setShape] = useState<AvatarShape>(primary?.shape || AVATAR_SHAPES[0]);
+  const [notifications, setNotifications] = useState(primary?.notifications ?? true);
+  const [saved, setSaved] = useState(false);
+  if (convo.kind === "group") {
+    return (
+      <div className="stack-form">
+        <h3>Group</h3>
+        <p>{convo.title}</p>
+        <p className="muted">{convo.botIds.map((id) => bots.find((b) => b.id === id)?.name).filter(Boolean).join(" · ")}</p>
+        <p className="muted">Group chats don’t have a per-Bot notification switch.</p>
+      </div>
+    );
+  }
+  if (!primary) return <p className="muted">No agent on this conversation.</p>;
   return (
-    <div className="settings">
-      <h3>Laptop-app</h3>
-      <InstallCrew variant="settings" />
-      <h3>Weergave</h3>
+    <form
+      className="stack-form"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        await onSave(primary.id, { name, title, description, notifications, color, shape });
+        setSaved(true);
+      }}
+    >
+      <section className="settings-section">
+        <h3>Agent settings</h3>
+        <p className="muted">Name, title, description, avatar, and notifications belong to this Bot alone.</p>
+        <div className="newbot-preview">
+          <Avatar color={color} shape={shape} size={56} status="idle" />
+          <div>
+            <strong>{name}</strong>
+            <p className="muted">{title || "Untitled role"}</p>
+          </div>
+        </div>
+        <label className="field">
+          Name
+          <input value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="field">
+          Title
+          <input value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <label className="field">
+          Description
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
+        </label>
+        <p className="field-label">Avatar</p>
+        <div className="swatches">
+          {AVATAR_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              className={`swatch ${c === color ? "on" : ""}`}
+              style={{ background: c }}
+              aria-label={c}
+              onClick={() => setColor(c)}
+            />
+          ))}
+        </div>
+        <div className="row">
+          {AVATAR_SHAPES.map((s) => (
+            <button key={s} type="button" className={s === shape ? "on" : ""} onClick={() => setShape(s)}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </section>
+      <section className="settings-section">
+        <h3>Notifications</h3>
+        <label className="toggle">
+          <input type="checkbox" checked={notifications} onChange={(e) => setNotifications(e.target.checked)} />
+          Notifications
+        </label>
+        <p className="muted">
+          Notify when this Bot finishes or needs input. Notifications are suppressed while Crew is focused.
+          The sidebar still shows unread activity.
+        </p>
+      </section>
       <div className="row">
-        <button className={theme === "dark" ? "on" : ""} onClick={() => onTheme("dark")}>
-          Donker
-        </button>
-        <button className={theme === "light" ? "on" : ""} onClick={() => onTheme("light")}>
-          Licht
+        <button type="submit">Save profile</button>
+        <button type="button" onClick={() => onMark(convo.attention === "unread" ? "none" : "unread")}>
+          {convo.attention === "unread" ? "Mark as read" : "Mark as unread"}
         </button>
       </div>
-      <h3>Gratis model-providers</h3>
-      <p className="muted">
-        Alleen free-tier keys: Cerebras, Mistral, Google Gemini, Groq en OpenRouter. Keys worden versleuteld opgeslagen;
-        we testen de verbinding voordat we opslaan.
-      </p>
-      {keyError && <div className="banner">{keyError}</div>}
-      <div className="provider-list">
-        {FREE_LLM_PROVIDERS.map((p) => {
-          const isOn = connected.has(p.id);
-          return (
-            <div className="provider-row" key={p.id}>
-              <div className="provider-head">
-                <strong>{p.label}</strong>
-                <span className={`pill ${isOn ? "on" : ""}`}>{isOn ? "Verbonden" : "Niet verbonden"}</span>
-              </div>
-              <p className="muted">{p.keyHint}</p>
-              <p className="muted">
-                <a href={p.signupUrl} target="_blank" rel="noreferrer">
-                  Gratis key aanmaken
-                </a>
-                {" · "}
-                model: {p.defaultModel}
-              </p>
-              {!isOn && (
-                <div className="row">
-                  <input
-                    type="password"
-                    placeholder={p.placeholder}
-                    value={drafts[p.id] || ""}
-                    onChange={(e) => setDrafts((d) => ({ ...d, [p.id]: e.target.value }))}
-                  />
-                  <button
-                    disabled={busy === p.id || !(drafts[p.id] || "").trim()}
-                    onClick={async () => {
-                      setKeyError(null);
-                      setBusy(p.id);
-                      try {
-                        await onSaveKey(p.id, drafts[p.id].trim());
-                        setDrafts((d) => ({ ...d, [p.id]: "" }));
-                      } catch (err) {
-                        setKeyError((err as Error).message);
-                      } finally {
-                        setBusy(null);
-                      }
-                    }}
-                  >
-                    {busy === p.id ? "Testen…" : "Verbinden"}
-                  </button>
-                </div>
-              )}
-              {isOn && (
-                <div className="row">
-                  <span className="muted">{connected.get(p.id)}</span>
-                  <button
-                    className="danger"
-                    disabled={busy === p.id}
-                    onClick={async () => {
-                      setKeyError(null);
-                      setBusy(p.id);
-                      try {
-                        await onRemoveKey(p.id);
-                      } catch (err) {
-                        setKeyError((err as Error).message);
-                      } finally {
-                        setBusy(null);
-                      }
-                    }}
-                  >
-                    Verbreken
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <h3>Auto-review</h3>
-      <ul>
-        {rules.map((r) => (
-          <li key={r.id}>
-            {r.mode}: {r.pattern}
-          </li>
-        ))}
-      </ul>
-      <div className="row">
-        <input value={pattern} onChange={(e) => setPattern(e.target.value)} />
-        <button onClick={() => void onRule(pattern, "ask_first")}>Ask first</button>
-      </div>
-      <button className="danger" onClick={() => void onLogout()}>
-        Uitloggen
+      {saved && <p className="muted">Saved.</p>}
+      <button type="button" className="danger" onClick={() => void onHide(primary.id)}>
+        Hide from sidebar
       </button>
-    </div>
+    </form>
   );
 }
 
@@ -1068,13 +1244,13 @@ function NewBot({
       <div className="newbot-preview">
         <Avatar color={color} shape={shape} size={64} status={previewStatus} title={statusLabel(previewStatus)} />
         <div>
-          <strong>{name || "Nieuwe teammate"}</strong>
-          <p className="muted">{title || "Specialist"}</p>
+          <strong>{name || "New Agent"}</strong>
+          <p className="muted">{title || "Untitled role"}</p>
         </div>
       </div>
-      <input placeholder="Naam" value={name} onChange={(e) => setName(e.target.value)} required />
-      <input placeholder="Rol / titel" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <textarea placeholder="Waarvoor is deze bot er?" value={description} onChange={(e) => setDescription(e.target.value)} />
+      <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
+      <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
+      <textarea placeholder="Description — the job this Bot owns" value={description} onChange={(e) => setDescription(e.target.value)} />
       <div className="swatches">
         {AVATAR_COLORS.map((c) => (
           <button
@@ -1096,7 +1272,7 @@ function NewBot({
       </div>
       {error && <div className="banner">{error}</div>}
       <button type="submit" disabled={busy || !name.trim()}>
-        {busy ? "Aanmaken…" : "Aanmaken"}
+        {busy ? "Creating…" : "Create"}
       </button>
     </form>
   );
@@ -1119,7 +1295,7 @@ function NewGroup({
         void onCreate(ids, title);
       }}
     >
-      <input placeholder="Groepsnaam" value={title} onChange={(e) => setTitle(e.target.value)} />
+      <input placeholder="Group name" value={title} onChange={(e) => setTitle(e.target.value)} />
       {bots.map((b) => (
         <label key={b.id}>
           <input
@@ -1131,7 +1307,7 @@ function NewGroup({
         </label>
       ))}
       <button type="submit" disabled={ids.length < 2 || ids.length > 6}>
-        Groep starten
+        Start group
       </button>
     </form>
   );
@@ -1153,7 +1329,7 @@ function SearchResults({
   onOpenConvo: (id: string) => void;
 }) {
   const q = query.toLowerCase();
-  if (!q) return <p className="muted">Typ om te zoeken</p>;
+  if (!q) return <p className="muted">Type to search</p>;
   return (
     <div className="search">
       {conversations
@@ -1189,11 +1365,11 @@ function formatWhen(iso: string): string {
   if (Number.isNaN(d.getTime())) return "";
   const now = new Date();
   if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString("nl-NL", { hour: "numeric", minute: "2-digit" });
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   }
   const yest = new Date(now);
   yest.setDate(now.getDate() - 1);
-  if (d.toDateString() === yest.toDateString()) return "Gisteren";
-  return d.toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+  if (d.toDateString() === yest.toDateString()) return "Yesterday";
+  return d.toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 

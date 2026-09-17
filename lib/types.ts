@@ -154,6 +154,8 @@ export type WorkspaceFile = {
   updatedAt: string;
 };
 
+export type LocalExecution = "ask" | "always" | "never";
+
 export type ComputerState = {
   active: boolean;
   url: string;
@@ -163,6 +165,8 @@ export type ComputerState = {
   logs: string[];
   takeover: boolean;
   wallpaperHour: number;
+  localExecution: LocalExecution;
+  localEgress: boolean;
 };
 
 export type User = {

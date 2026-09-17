@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     shape?: AvatarShape;
   };
   const name = (body.name || "").trim();
-  if (!name) return NextResponse.json({ error: "Naam verplicht" }, { status: 400 });
+  if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
   const bot = await mutate((state) => {
     if (state.bots.filter((b) => !b.hidden).length >= MAX_BOTS) {
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
       id,
       name,
       title: body.title || "Specialist",
-      description: body.description || "Nieuwe teammate",
+      description: body.description || "New teammate",
       color: body.color || AVATAR_COLORS[state.bots.length % AVATAR_COLORS.length],
       shape: body.shape || AVATAR_SHAPES[state.bots.length % AVATAR_SHAPES.length],
       memory: "",
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
       title: name,
       botIds: [id],
       lastMessageAt: new Date().toISOString(),
-      lastPreview: "Waarvoor ben ik er?",
+      lastPreview: "What should I own?",
       attention: "unread",
     });
     state.messages.push({
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       role: "assistant",
       senderBotId: id,
       kind: "text",
-      content: `Hey, ik ben ${name}. Waarvoor wil je dat ik er ben? Je mag het gewoon dumpen — ik stel vervolgvragen.`,
+      content: `Hey, I’m ${name}. What should I own? Dump the job — I’ll ask follow-ups.`,
       createdAt: new Date().toISOString(),
     });
     return created;
@@ -68,14 +68,28 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const body = (await req.json()) as { id: string; name?: string; title?: string; description?: string; hidden?: boolean };
+  const body = (await req.json()) as {
+    id: string;
+    name?: string;
+    title?: string;
+    description?: string;
+    hidden?: boolean;
+    notifications?: boolean;
+    color?: string;
+    shape?: AvatarShape;
+  };
   const bot = await mutate((state) => {
     const found = state.bots.find((b) => b.id === body.id);
     if (!found) return null;
     if (body.name) found.name = body.name;
     if (body.title) found.title = body.title;
     if (body.description) found.description = body.description;
+    if (body.color) found.color = body.color;
+    if (body.shape) found.shape = body.shape;
     if (typeof body.hidden === "boolean") found.hidden = body.hidden;
+    if (typeof body.notifications === "boolean") found.notifications = body.notifications;
+    const convo = state.conversations.find((c) => c.kind === "dm" && c.botIds[0] === found.id);
+    if (convo && body.name) convo.title = body.name;
     return found;
   });
   if (!bot) return NextResponse.json({ error: "not found" }, { status: 404 });

@@ -24,18 +24,18 @@ export async function POST(req: Request) {
   const secret = (body.secret || "").trim();
   if (!isFreeLlmProvider(provider)) {
     return NextResponse.json(
-      { error: "Alleen Cerebras, Mistral, Google Gemini, Groq en OpenRouter zijn toegestaan." },
+      { error: "Only Cerebras, Mistral, Google Gemini, Groq, and OpenRouter are allowed." },
       { status: 400 },
     );
   }
-  if (!secret) return NextResponse.json({ error: "API key verplicht" }, { status: 400 });
+  if (!secret) return NextResponse.json({ error: "API key is required" }, { status: 400 });
 
   if (body.test !== false) {
     try {
       await testProviderConnection(provider, secret);
     } catch (err) {
       return NextResponse.json(
-        { error: `Verbinding mislukt: ${(err as Error).message}` },
+        { error: `Connection failed: ${(err as Error).message}` },
         { status: 400 },
       );
     }
@@ -58,7 +58,7 @@ export async function DELETE(req: Request) {
   const { searchParams } = new URL(req.url);
   const provider = searchParams.get("provider") || "";
   if (!isFreeLlmProvider(provider)) {
-    return NextResponse.json({ error: "Onbekende provider" }, { status: 400 });
+    return NextResponse.json({ error: "Unknown provider" }, { status: 400 });
   }
   await mutate((state) => {
     state.keys = state.keys.filter((k) => k.provider !== provider);

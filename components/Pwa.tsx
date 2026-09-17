@@ -50,7 +50,7 @@ export function InstallCrew({ variant = "banner" }: { variant?: "banner" | "sett
         window.location.href = "/install";
         return;
       }
-      setHint("Gebruik Chrome of Edge: icoon in de adresbalk → Install Crew.");
+      setHint("Use Chrome or Edge: the icon in the address bar → Install Crew.");
       return;
     }
     await deferred.prompt();
@@ -62,23 +62,31 @@ export function InstallCrew({ variant = "banner" }: { variant?: "banner" | "sett
   if (standalone) {
     return (
       <div className={`install-card ${variant}`} data-testid="crew-installed">
-        <strong>Crew draait als app</strong>
-        <p className="muted">Eigen venster, zonder browser-tab. Je vindt ‘m bij je andere apps.</p>
+        <strong>{variant === "settings" ? "Installed on this device" : "Crew is running as an app"}</strong>
+        <p className="muted">
+          {variant === "settings"
+            ? "The iOS, Android, and laptop apps share this account."
+            : "Own window, no browser tab. You’ll find it with your other apps."}
+        </p>
       </div>
     );
   }
 
   return (
     <div className={`install-card ${variant}`}>
-      <strong>Zet Crew op je laptop</strong>
-      <p className="muted">Installeer als app: eigen icoon, eigen venster, geen adresbalk.</p>
+      <strong>{variant === "settings" ? "Get the iOS or Android app" : "Put Crew on your laptop"}</strong>
+      <p className="muted">
+        {variant === "settings"
+          ? "Install Crew on this laptop or open the mobile app with the same account."
+          : "Install as an app: own icon, own window, no address bar."}
+      </p>
       <div className="row">
         <button className="send install-btn" type="button" onClick={() => void install()}>
-          {deferred ? "Installeren" : "Hoe installeer ik dit?"}
+          {deferred ? "Install Crew" : "How do I install this?"}
         </button>
         {variant !== "page" && (
           <a className="ghost" href="/install">
-            Stappen
+            Steps
           </a>
         )}
       </div>
@@ -86,19 +94,19 @@ export function InstallCrew({ variant = "banner" }: { variant?: "banner" | "sett
       {variant === "page" && (
         <ol className="install-steps">
           <li>
-            <strong>Chrome of Edge (Windows / ChromeOS / Linux)</strong> — klik op het icoon in de adresbalk of op
-            Installeren hierboven. Crew komt in het Start-menu / je apps.
+            <strong>Chrome or Edge (Windows / ChromeOS / Linux)</strong> — click the icon in the address bar or
+            Install Crew above. Crew lands in the Start menu / your apps.
           </li>
           <li>
-            <strong>Chrome op Mac</strong> — klik ⋮ → <em>Cast, save, and share</em> → <em>Install Crew…</em>. Daarna
-            staat Crew in Programma’s.
+            <strong>Chrome on Mac</strong> — click ⋮ → <em>Cast, save, and share</em> → <em>Install Crew…</em>. Then
+            Crew is in Applications.
           </li>
           <li>
-            <strong>Safari op Mac</strong> — Bestand → <em>Zet in Dock</em> (of Deel → Zet in Dock).
+            <strong>Safari on Mac</strong> — File → <em>Add to Dock</em> (or Share → Add to Dock).
           </li>
           <li>
-            <strong>Lokaal draaien</strong> — in deze repo: <code>npm run dev</code> en daarna{" "}
-            <code>npm run desktop</code> opent Crew meteen als app-venster.
+            <strong>Run locally</strong> — in this repo: <code>npm run dev</code> then{" "}
+            <code>npm run desktop</code> opens Crew as an app window.
           </li>
         </ol>
       )}

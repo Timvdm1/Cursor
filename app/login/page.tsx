@@ -21,7 +21,7 @@ export default function LoginPage() {
     });
     const json = await res.json();
     if (!res.ok) {
-      setError(json.error || "Login mislukt");
+      setError(json.error || "Sign in failed");
       return;
     }
     router.push("/");
@@ -35,19 +35,19 @@ export default function LoginPage() {
           <span className="brand-mark" />
           Crew
         </div>
-        <h1>Je team, altijd aan.</h1>
-        <p className="muted">Bots met namen, geheugen en een gedeelde computer. Demo: demo@crew.app / crew</p>
+        <h1>Sign in</h1>
+        <p className="muted">Bots with names, memory, and a shared computer. Demo: demo@crew.app / crew</p>
         <form onSubmit={submit}>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Wachtwoord" />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
           {error && <div className="banner">{error}</div>}
           <button className="send" type="submit" style={{ width: "100%", height: 44 }}>
-            {mode === "login" ? "Binnen" : "Account maken"}
+            {mode === "login" ? "Sign in" : "Create account"}
           </button>
         </form>
         <p className="muted" style={{ marginTop: 12 }}>
           <button className="ghost" type="button" onClick={() => setMode(mode === "login" ? "register" : "login")}>
-            {mode === "login" ? "Nieuw account" : "Ik heb al een account"}
+            {mode === "login" ? "Create account" : "I already have an account"}
           </button>
         </p>
         <InstallCrew variant="banner" />

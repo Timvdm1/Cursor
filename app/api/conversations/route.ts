@@ -9,7 +9,7 @@ export async function POST(req: Request) {
   const body = (await req.json()) as { kind: "dm" | "group"; botIds: string[]; title?: string };
   const botIds = [...new Set(body.botIds || [])];
   if (body.kind === "group" && (botIds.length < 2 || botIds.length > MAX_GROUP)) {
-    return NextResponse.json({ error: "Groep: 2 tot 6 bots" }, { status: 400 });
+    return NextResponse.json({ error: "Group chats need 2 to 6 Bots" }, { status: 400 });
   }
   const convo = await mutate((state) => {
     const title =

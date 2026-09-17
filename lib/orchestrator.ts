@@ -77,7 +77,7 @@ function planForBot(
     events.push({ type: "trace", text: `${bot.name}: takeover gevraagd` });
     events.push({
       type: "blocked",
-      reason: "Gevoelige stap — vul dit in op de computer, niet in de chat.",
+      reason: "Sensitive step — complete this on the computer, not in chat.",
     });
     events.push({
       type: "text",

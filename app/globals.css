@@ -80,7 +80,7 @@ button { cursor: pointer; }
 .roster-row em { font-style: normal; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dot { width: 8px; height: 8px; border-radius: 99px; background: var(--accent); margin-left: auto; }
 .dot.needs { background: #fbbf24; }
-.roster-foot { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
+.roster-foot { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); flex-wrap: wrap; align-items: center; }
 .roster-foot button, .ghost, .composer .icon, .tabs button, .market-row button, .row button, .stack-form button, .card button, .comp-tools button {
   background: var(--bg-3);
   border: 1px solid var(--line);
@@ -176,6 +176,8 @@ button { cursor: pointer; }
 
 .modal-bg { position: fixed; inset: 0; background: #0008; display: grid; place-items: center; z-index: 30; }
 .modal { width: min(640px, calc(100vw - 24px)); max-height: 80dvh; overflow: auto; background: var(--bg-2); border: 1px solid var(--line); border-radius: 16px; }
+.modal.wide { width: min(860px, calc(100vw - 16px)); max-height: 88dvh; }
+.modal.wide .modal-body { padding: 0; }
 .modal-body { padding: 16px; }
 .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
 .tabs button.on, .row button.on { outline: 2px solid var(--accent); }
@@ -239,6 +241,117 @@ button { cursor: pointer; }
 }
 .pill.on { background: var(--accent-dim); color: var(--accent); }
 .provider-row a { color: var(--accent); }
+
+.settings-shell {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  min-height: min(62dvh, 560px);
+}
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px;
+  border-right: 1px solid var(--line);
+  background: var(--bg);
+}
+.settings-nav button {
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.settings-nav button.on { background: var(--bg-3); font-weight: 600; }
+.settings-pane { padding: 8px 16px 20px; overflow: auto; max-height: min(70dvh, 620px); }
+.settings-section { margin: 16px 0 22px; }
+.settings-section h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-weight: 650;
+}
+.field, .field-label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; margin: 10px 0; }
+.toggle { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+.rule-list { list-style: none; padding: 0; margin: 0 0 10px; }
+.rule-list li { display: flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.settings-row strong { display: block; }
+.usage-meter .bar {
+  height: 6px;
+  background: var(--bg-3);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.usage-meter .bar > i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.tool-toggles { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 8px; }
+.yours-plugin { align-items: flex-start; }
+.account-menu { position: relative; margin-left: auto; }
+.account-chip {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  max-width: 140px;
+}
+.account-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.account-pop {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 14;
+  min-width: 220px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.account-pop button { text-align: left; background: transparent; border: 0; padding: 10px 12px; border-radius: 8px; }
+.account-about {
+  margin: 0;
+  padding: 10px 12px 8px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.account-about em { font-style: normal; color: var(--muted); font-size: 12px; }
+.notice-stack { margin: 0 16px 8px; }
+.notice-head {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 650;
+  margin-bottom: 6px;
+}
+.banner.notice { margin: 0; }
+.chat-title { cursor: pointer; }
+@media (max-width: 860px) {
+  .settings-shell { grid-template-columns: 1fr; }
+  .settings-nav { flex-direction: row; overflow: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .settings-nav button { white-space: nowrap; }
+}
 @media (display-mode: standalone), (display-mode: window-controls-overlay) {
   .install-card.banner { display: none; }
 }

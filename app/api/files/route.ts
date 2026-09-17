@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = (await req.json()) as { path: string; content: string };
   if (!body.path?.startsWith("/workspace")) {
-    return NextResponse.json({ error: "Alleen /workspace" }, { status: 400 });
+    return NextResponse.json({ error: "Only /workspace paths are allowed" }, { status: 400 });
   }
   const file = await mutate((state) => {
     const existing = state.files.find((f) => f.path === body.path);

@@ -22,18 +22,25 @@ async function cloudflareKv(): Promise<Kv | null> {
   }
 }
 
+function normalize(state: CrewState): CrewState {
+  if (!state.computer.localExecution) state.computer.localExecution = "ask";
+  if (typeof state.computer.localEgress !== "boolean") state.computer.localEgress = false;
+  if (state.computer.title === "Crew Computer") state.computer.title = "Agent Computer";
+  return state;
+}
+
 export async function loadState(): Promise<CrewState> {
   const kv = await cloudflareKv();
   if (kv) {
     const raw = await kv.get(KV_KEY);
-    if (raw) return JSON.parse(raw) as CrewState;
+    if (raw) return normalize(JSON.parse(raw) as CrewState);
     const seeded = seedState();
     await kv.put(KV_KEY, JSON.stringify(seeded));
     return seeded;
   }
   try {
     const raw = await readFile(DATA_FILE, "utf8");
-    return JSON.parse(raw) as CrewState;
+    return normalize(JSON.parse(raw) as CrewState);
   } catch {
     const seeded = seedState();
     await persistFs(seeded);

@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     replyToId?: string;
   };
   const content = (body.content || "").trim();
-  if (!content) return NextResponse.json({ error: "Leeg bericht" }, { status: 400 });
+  if (!content) return NextResponse.json({ error: "Empty message" }, { status: 400 });
 
   const result = await mutate(async (state) => {
     const convo = state.conversations.find((c) => c.id === body.conversationId);
@@ -171,7 +171,7 @@ export async function POST(req: Request) {
     throw err;
   });
 
-  if (!result) return NextResponse.json({ error: "Gesprek niet gevonden" }, { status: 404 });
+  if (!result) return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
 
   const nav = result.events.find((e) => e.type === "computer");
   if (nav && nav.type === "computer") {

@@ -19,6 +19,7 @@ export default async function HomePage() {
           email: state.user.email,
           name: state.user.name,
           appearance: state.user.appearance,
+          timezone: state.user.timezone,
         },
         bots: state.bots.filter((b) => !b.hidden),
         conversations: state.conversations,

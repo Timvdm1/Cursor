@@ -37,11 +37,11 @@ describe("presenceStatus", () => {
 
 describe("statusLabel", () => {
   it("names every lifecycle state", () => {
-    expect(statusLabel("idle")).toBe("Rustig");
-    expect(statusLabel("thinking")).toBe("Denkt na");
-    expect(statusLabel("working")).toBe("Aan het werk");
-    expect(statusLabel("waiting")).toBe("Wacht");
-    expect(statusLabel("blocked")).toBe("Hulp nodig");
-    expect(statusLabel("done")).toBe("Klaar");
+    expect(statusLabel("idle")).toBe("Idle");
+    expect(statusLabel("thinking")).toBe("Thinking");
+    expect(statusLabel("working")).toBe("Working");
+    expect(statusLabel("waiting")).toBe("Unread");
+    expect(statusLabel("blocked")).toBe("Needs attention");
+    expect(statusLabel("done")).toBe("Done");
   });
 });

@@ -27,17 +27,17 @@ export function presenceStatus(opts: {
 export function statusLabel(status: BotStatus): string {
   switch (status) {
     case "idle":
-      return "Rustig";
+      return "Idle";
     case "thinking":
-      return "Denkt na";
+      return "Thinking";
     case "working":
-      return "Aan het werk";
+      return "Working";
     case "waiting":
-      return "Wacht";
+      return "Unread";
     case "blocked":
-      return "Hulp nodig";
+      return "Needs attention";
     case "done":
-      return "Klaar";
+      return "Done";
     default:
       return status;
   }
