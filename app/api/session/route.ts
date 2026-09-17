@@ -45,7 +45,12 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Onjuiste login. Probeer demo@crew.app / crew" }, { status: 401 });
 
   const jar = await cookies();
-  jar.set(SESSION_COOKIE, user.id, { httpOnly: true, sameSite: "lax", path: "/" });
+  jar.set(SESSION_COOKIE, user.id, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+  });
   return NextResponse.json({ user: { id: user.id, email: user.email, name: user.name } });
 }
 

@@ -5,16 +5,38 @@ import { emptyState, seedState } from "./seed";
 
 const DATA_DIR = path.join(process.cwd(), ".data");
 const DATA_FILE = path.join(DATA_DIR, "crew.json");
+const KV_KEY = "crew-state";
 
 let writeQueue: Promise<void> = Promise.resolve();
 
+type Kv = { get: (key: string) => Promise<string | null>; put: (key: string, value: string) => Promise<void> };
+
+async function cloudflareKv(): Promise<Kv | null> {
+  try {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    const { env } = await getCloudflareContext({ async: true });
+    const kv = (env as { CREW?: Kv } | undefined)?.CREW;
+    return kv ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function loadState(): Promise<CrewState> {
+  const kv = await cloudflareKv();
+  if (kv) {
+    const raw = await kv.get(KV_KEY);
+    if (raw) return JSON.parse(raw) as CrewState;
+    const seeded = seedState();
+    await kv.put(KV_KEY, JSON.stringify(seeded));
+    return seeded;
+  }
   try {
     const raw = await readFile(DATA_FILE, "utf8");
     return JSON.parse(raw) as CrewState;
   } catch {
     const seeded = seedState();
-    await persist(seeded);
+    await persistFs(seeded);
     return seeded;
   }
 }
@@ -31,6 +53,16 @@ export async function mutate<T>(fn: (state: CrewState) => T | Promise<T>): Promi
 }
 
 async function persist(state: CrewState): Promise<void> {
+  const kv = await cloudflareKv();
+  const payload = JSON.stringify(state);
+  if (kv) {
+    await kv.put(KV_KEY, payload);
+    return;
+  }
+  await persistFs(state);
+}
+
+async function persistFs(state: CrewState): Promise<void> {
   await mkdir(DATA_DIR, { recursive: true });
   const tmp = `${DATA_FILE}.${process.pid}.tmp`;
   await writeFile(tmp, JSON.stringify(state, null, 2), "utf8");
