@@ -4,7 +4,6 @@ import { mutate } from "@/lib/store";
 import { eventsToMessages, runTurn } from "@/lib/orchestrator";
 import { canHandoff, nextHopCount } from "@/lib/handoffs";
 import {
-  activeLlmSummary,
   applyLlmToEvents,
   applyProviderError,
   chatHistory,
@@ -206,7 +205,7 @@ export async function POST(req: Request) {
             model: completion.model,
             label: providerMeta(completion.provider).label,
           }
-        : activeLlmSummary(state),
+        : null,
       llmError,
     };
   }).catch((err: Error) => {
