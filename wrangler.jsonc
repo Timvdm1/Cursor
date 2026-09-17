@@ -13,9 +13,8 @@
     "enabled": true
   },
   "kv_namespaces": [
-    { "binding": "CREW" }
-  ],
-  "triggers": {
-    "crons": ["*/15 * * * *"]
-  }
+    {
+      "binding": "CREW"
+    }
+  ]
 }
