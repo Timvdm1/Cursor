@@ -9,6 +9,13 @@ export const metadata: Metadata = {
   description: "Teammates met een gedeelde computer — roster-first agents.",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover" as const,
+  themeColor: "#0b0c0e",
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="nl">

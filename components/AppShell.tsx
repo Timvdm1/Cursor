@@ -60,6 +60,8 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
   const [computerLevel, setComputerLevel] = useState<"status" | "preview" | "full">("status");
   const [error, setError] = useState<string | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [rosterOpen, setRosterOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
 
   const convo = data.conversations.find((c) => c.id === activeId) || data.conversations[0];
@@ -123,15 +125,16 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
     linear-gradient(180deg, hsl(${210 + hour} 28% ${theme === "dark" ? 10 : 86}%), hsl(${230} 30% ${theme === "dark" ? 6 : 92}%))`;
 
   return (
-    <div className={`crew-root ${theme}`}>
-      <aside className="roster">
+    <div className={`crew-root ${theme} ${rosterOpen ? "roster-open" : ""}`}>
+      {rosterOpen && <button className="scrim" aria-label="Sluit lijst" onClick={() => setRosterOpen(false)} />}
+      <aside className={`roster ${rosterOpen ? "open" : ""}`}>
         <header className="roster-head">
           <div className="brand">
             <span className="brand-mark" />
             Crew
           </div>
-          <button className="ghost" onClick={() => setOverlay("palette")} title="Zoeken (⌘K)">
-            ⌘K
+          <button className="ghost" onClick={() => setOverlay("palette")} title="Zoeken">
+            Zoek
           </button>
         </header>
         <div className="roster-list">
@@ -144,6 +147,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
                 className={`roster-row ${c.id === convo?.id ? "active" : ""} att-${c.attention}`}
                 onClick={() => {
                   setActiveId(c.id);
+                  setRosterOpen(false);
                   void j("/api/conversations", {
                     method: "PATCH",
                     body: JSON.stringify({ id: c.id, attention: "none" }),
@@ -177,7 +181,10 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
 
       <main className="chat">
         <header className="chat-head">
-          <div>
+          <button className="menu-btn" aria-label="Bots" onClick={() => setRosterOpen(true)}>
+            ☰
+          </button>
+          <div className="chat-title">
             <h1>{convo?.title}</h1>
             <p>
               {convo?.kind === "group"
@@ -194,17 +201,51 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
               onClick={() => setComputerLevel((l) => (l === "preview" ? "status" : "preview"))}
               title="Computer"
             >
-              <span /> Computer
+              <span />
+              <em className="desk-label">Computer</em>
             </button>
-            <button className="ghost" onClick={() => setComputerLevel("full")}>
+            <button className="ghost desk-only" onClick={() => setComputerLevel("full")}>
               Takeover
             </button>
-            <button className="ghost" onClick={() => setOverlay("market")}>
+            <button className="ghost desk-only" onClick={() => setOverlay("market")}>
               Marketplace
             </button>
-            <button className="ghost" onClick={() => setOverlay("settings")}>
+            <button className="ghost desk-only" onClick={() => setOverlay("settings")}>
               Instellingen
             </button>
+            <div className="more">
+              <button className="ghost more-btn" aria-label="Meer" onClick={() => setMoreOpen((v) => !v)}>
+                ⋯
+              </button>
+              {moreOpen && (
+                <div className="more-pop">
+                  <button
+                    onClick={() => {
+                      setComputerLevel("full");
+                      setMoreOpen(false);
+                    }}
+                  >
+                    Takeover
+                  </button>
+                  <button
+                    onClick={() => {
+                      setOverlay("market");
+                      setMoreOpen(false);
+                    }}
+                  >
+                    Marketplace
+                  </button>
+                  <button
+                    onClick={() => {
+                      setOverlay("settings");
+                      setMoreOpen(false);
+                    }}
+                  >
+                    Instellingen
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -277,7 +318,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
             </button>
             <textarea
               value={draft}
-              placeholder={`Bericht ${convo?.title ?? ""} — @ voor bots, / voor skills`}
+                  placeholder={convo ? `Bericht ${convo.title}` : "Bericht"}
               onChange={(e) => onDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
