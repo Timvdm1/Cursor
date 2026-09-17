@@ -62,6 +62,8 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [rosterOpen, setRosterOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [mobileScreen, setMobileScreen] = useState<"home" | "chat">("home");
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const scroller = useRef<HTMLDivElement>(null);
 
   const convo = data.conversations.find((c) => c.id === activeId) || data.conversations[0];
@@ -112,6 +114,25 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
     }
   }
 
+  function openConvo(id: string) {
+    if (convo) setDrafts((d) => ({ ...d, [convo.id]: draft }));
+    setActiveId(id);
+    setDraft(drafts[id] || "");
+    setRosterOpen(false);
+    setMobileScreen("chat");
+    void j("/api/conversations", {
+      method: "PATCH",
+      body: JSON.stringify({ id, attention: "none" }),
+    });
+  }
+
+  function backHome() {
+    if (convo) setDrafts((d) => ({ ...d, [convo.id]: draft }));
+    setMobileScreen("home");
+    setComputerLevel("status");
+    setMoreOpen(false);
+  }
+
   function onDraft(value: string) {
     setDraft(value);
     const at = /(?:^|\s)@(\w*)$/.exec(value);
@@ -125,10 +146,10 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
     linear-gradient(180deg, hsl(${210 + hour} 28% ${theme === "dark" ? 10 : 86}%), hsl(${230} 30% ${theme === "dark" ? 6 : 92}%))`;
 
   return (
-    <div className={`crew-root ${theme} ${rosterOpen ? "roster-open" : ""}`}>
+    <div className={`crew-root ${theme} phone-${mobileScreen} ${rosterOpen ? "roster-open" : ""} ${draft.trim() ? "has-draft" : ""}`}>
       {rosterOpen && <button className="scrim" aria-label="Sluit lijst" onClick={() => setRosterOpen(false)} />}
       <aside className={`roster ${rosterOpen ? "open" : ""}`}>
-        <header className="roster-head">
+        <header className="roster-head desk-bar">
           <div className="brand">
             <span className="brand-mark" />
             Crew
@@ -137,6 +158,48 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
             Zoek
           </button>
         </header>
+        <header className="ios-home-head">
+          <h1>Crew</h1>
+          <div className="ios-home-actions">
+            <button className="icon-round" aria-label="Zoeken" onClick={() => setOverlay("palette")}>
+              ⌕
+            </button>
+            <button className="icon-round" aria-label="Instellingen" onClick={() => setOverlay("settings")}>
+              ⚙
+            </button>
+            <button className="icon-round plus" aria-label="Nieuw" onClick={() => setMoreOpen((v) => !v)}>
+              +
+            </button>
+          </div>
+        </header>
+        {moreOpen && mobileScreen === "home" && (
+          <div className="plus-sheet">
+            <button
+              onClick={() => {
+                setOverlay("newbot");
+                setMoreOpen(false);
+              }}
+            >
+              Nieuwe bot
+            </button>
+            <button
+              onClick={() => {
+                setOverlay("newgroup");
+                setMoreOpen(false);
+              }}
+            >
+              Nieuwe groep
+            </button>
+            <button
+              onClick={() => {
+                setOverlay("market");
+                setMoreOpen(false);
+              }}
+            >
+              Marketplace
+            </button>
+          </div>
+        )}
         <div className="roster-list">
           {data.conversations.map((c) => {
             const bot = data.bots.find((b) => b.id === c.botIds[0]);
@@ -145,14 +208,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
               <button
                 key={c.id}
                 className={`roster-row ${c.id === convo?.id ? "active" : ""} att-${c.attention}`}
-                onClick={() => {
-                  setActiveId(c.id);
-                  setRosterOpen(false);
-                  void j("/api/conversations", {
-                    method: "PATCH",
-                    body: JSON.stringify({ id: c.id, attention: "none" }),
-                  });
-                }}
+                onClick={() => openConvo(c.id)}
               >
                 {c.kind === "group" ? (
                   <span className="stack">
@@ -165,7 +221,10 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
                   <Avatar color={bot.color} shape={bot.shape} status={status} title={statusLabel(status)} />
                 ) : null}
                 <span className="meta">
-                  <strong>{c.title}</strong>
+                  <strong>
+                    {c.title}
+                    <time>{formatWhen(c.lastMessageAt)}</time>
+                  </strong>
                   <em>{c.lastPreview}</em>
                 </span>
                 {c.attention !== "none" && <i className={`dot ${c.attention}`} />}
@@ -181,19 +240,29 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
 
       <main className="chat">
         <header className="chat-head">
-          <button className="menu-btn" aria-label="Bots" onClick={() => setRosterOpen(true)}>
-            ☰
+          <button className="menu-btn" aria-label="Terug" onClick={backHome}>
+            ‹
           </button>
-          <div className="chat-title">
-            <h1>{convo?.title}</h1>
-            <p>
-              {convo?.kind === "group"
-                ? convo.botIds
-                    .map((id) => data.bots.find((b) => b.id === id)?.name)
-                    .filter(Boolean)
-                    .join(" · ")
-                : data.bots.find((b) => b.id === convo?.botIds[0])?.title}
-            </p>
+          <div className="chat-title phone-center">
+            {convo?.kind !== "group" && data.bots.find((b) => b.id === convo?.botIds[0]) && (
+              <Avatar
+                color={data.bots.find((b) => b.id === convo?.botIds[0])!.color}
+                shape={data.bots.find((b) => b.id === convo?.botIds[0])!.shape}
+                size={28}
+                status={working ? "working" : "idle"}
+              />
+            )}
+            <div>
+              <h1>{convo?.title}</h1>
+              <p>
+                {convo?.kind === "group"
+                  ? convo.botIds
+                      .map((id) => data.bots.find((b) => b.id === id)?.name)
+                      .filter(Boolean)
+                      .join(" · ")
+                  : data.bots.find((b) => b.id === convo?.botIds[0])?.title}
+              </p>
+            </div>
           </div>
           <div className="head-actions">
             <button
@@ -427,6 +496,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
               const res = await j<{ bot: Bot }>("/api/bots", { method: "POST", body: JSON.stringify(payload) });
               await reload();
               setActiveId("convo_" + res.bot.id);
+              setMobileScreen("chat");
               setOverlay("none");
             }}
           />
@@ -444,6 +514,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
               });
               await reload();
               setActiveId(res.conversation.id);
+              setMobileScreen("chat");
               setOverlay("none");
             }}
           />
@@ -462,7 +533,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
           <SearchResults
             query={query}
             onOpenConvo={(id) => {
-              setActiveId(id);
+              openConvo(id);
               setOverlay("none");
             }}
             conversations={data.conversations}
@@ -896,5 +967,18 @@ function SearchResults({
         ))}
     </div>
   );
+}
+
+function formatWhen(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) {
+    return d.toLocaleTimeString("nl-NL", { hour: "numeric", minute: "2-digit" });
+  }
+  const yest = new Date(now);
+  yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return "Gisteren";
+  return d.toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
 }
 

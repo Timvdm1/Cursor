@@ -69,7 +69,14 @@ button { cursor: pointer; }
 .roster-row:hover { background: var(--bg-3); }
 .roster-row.active { background: var(--bg-3); }
 .roster-row .meta { display: flex; flex-direction: column; min-width: 0; }
-.roster-row strong { font-size: 13px; }
+.ios-home-head, .plus-sheet { display: none; }
+.roster-row strong { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-size: 13px; }
+.roster-row time { font-weight: 500; color: var(--muted); font-size: 11px; flex-shrink: 0; }
+.icon-round {
+  width: 36px; height: 36px; border-radius: 99px; border: 0;
+  background: var(--bg-3); display: grid; place-items: center;
+}
+.icon-round.plus { background: var(--accent); color: #06281c; font-size: 22px; line-height: 1; }
 .roster-row em { font-style: normal; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dot { width: 8px; height: 8px; border-radius: 99px; background: var(--accent); margin-left: auto; }
 .dot.needs { background: #fbbf24; }
@@ -227,55 +234,129 @@ button { cursor: pointer; }
 
 @media (max-width: 860px) {
   .crew-root {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100%;
+    max-width: 100vw;
     height: 100dvh;
     padding-bottom: env(safe-area-inset-bottom);
   }
-  .menu-btn, .more-btn, .scrim { display: grid; }
+  .menu-btn, .more-btn { display: grid; }
   .menu-btn {
     place-items: center;
     width: 44px; height: 44px; flex-shrink: 0;
-    background: var(--bg-3); border: 1px solid var(--line); border-radius: 12px;
+    background: transparent; border: 0; font-size: 32px; line-height: 1; color: var(--accent);
   }
-  .scrim {
-    position: fixed; inset: 0; z-index: 35;
-    background: #0008; border: 0; width: 100%; height: 100%;
+  .desk-only, .desk-label, .desk-bar, .roster-foot, .scrim { display: none !important; }
+  .ios-home-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: max(12px, env(safe-area-inset-top)) 16px 10px;
+    border-bottom: 1px solid var(--line);
   }
-  .desk-only, .desk-label { display: none !important; }
+  .ios-home-head h1 {
+    margin: 0;
+    font-size: 34px;
+    letter-spacing: -0.05em;
+    font-weight: 750;
+    min-width: 0;
+    flex: 1;
+  }
+  .ios-home-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .ios-home-actions .icon-round {
+    width: 34px; height: 34px; background: #2a2c31; color: var(--text); font-size: 16px;
+  }
+  .ios-home-actions .icon-round.plus { background: var(--accent); color: #06281c; font-size: 22px; }
+  .plus-sheet {
+    display: flex;
+    flex-direction: column;
+    margin: 8px 12px 0;
+    background: var(--bg-3);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .plus-sheet button {
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 14px 16px;
+    min-height: 48px;
+  }
+  .plus-sheet button:last-child { border-bottom: 0; }
+  .crew-root.phone-home .chat,
+  .crew-root.phone-home .computer { display: none !important; }
+  .crew-root.phone-chat .roster { display: none !important; }
   .roster {
-    position: fixed;
-    inset: 0 auto 0 0;
-    width: min(86vw, 320px);
+    position: relative;
+    inset: auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     max-height: none;
-    z-index: 40;
-    transform: translateX(-105%);
-    transition: transform 220ms cubic-bezier(.2,.9,.2,1);
-    padding-bottom: env(safe-area-inset-bottom);
+    transform: none;
+    z-index: auto;
+    box-shadow: none;
+    overflow: hidden;
   }
-  .roster.open { transform: translateX(0); box-shadow: 16px 0 40px #0008; }
-  .roster-row { min-height: 52px; padding: 10px; }
-  .roster-foot button { min-height: 44px; flex: 1; }
-  .chat-head { padding: 10px 12px; padding-top: max(10px, env(safe-area-inset-top)); }
-  .transcript { padding: 12px 14px 8px; }
-  .bubble { max-width: 92%; }
-  .composer-wrap { padding: 8px 12px max(12px, env(safe-area-inset-bottom)); }
-  .send, .composer .icon { width: 44px; height: 44px; }
+  .roster-list { padding: 0; }
+  .roster-row .crew-avatar { width: 52px !important; height: 52px !important; }
+  .roster-row {
+    min-height: 72px;
+    padding: 10px 16px;
+    border-radius: 0;
+    border-bottom: 1px solid var(--line);
+    gap: 12px;
+  }
+  .roster-row.active { background: transparent; }
+  .roster-row .meta { flex: 1; min-width: 0; overflow: hidden; }
+  .roster-row strong { font-size: 16px; }
+  .roster-row em { font-size: 14px; }
+  .chat-head { padding: 6px 8px; padding-top: max(8px, env(safe-area-inset-top)); }
+  .chat-title.phone-center { display: flex; align-items: center; gap: 8px; justify-content: center; text-align: center; }
+  .transcript { padding: 12px 12px 8px; }
+  .msg.mine .bubble {
+    background: #2a2d33;
+    border: 0;
+    border-radius: 18px 18px 6px 18px;
+  }
+  .bubble { border: 0; border-radius: 18px 18px 18px 6px; max-width: 82%; }
+  .composer {
+    background: var(--bg);
+    border: 0;
+    padding: 0;
+    gap: 6px;
+    align-items: center;
+  }
+  .composer textarea {
+    background: var(--bg-3);
+    border-radius: 22px;
+    min-height: 40px;
+    padding: 10px 14px;
+  }
+  .composer .icon {
+    width: 36px; height: 36px; border-radius: 99px; border: 0; background: var(--bg-3);
+  }
+  .send {
+    width: 36px; height: 36px; border-radius: 10px;
+  }
+  .crew-root:not(.has-draft) .send { display: none; }
+  .composer-wrap { padding: 6px 10px max(10px, env(safe-area-inset-bottom)); }
   .computer {
     position: fixed;
     left: 0; right: 0; bottom: 0;
     width: auto;
-    height: min(72dvh, 560px);
+    height: min(78dvh, 620px);
     z-index: 28;
     border-left: 0;
     border-top: 1px solid var(--line);
-    border-radius: 16px 16px 0 0;
+    border-radius: 18px 18px 0 0;
     min-height: 0;
   }
-  .computer.full {
-    inset: 0;
-    height: auto;
-    border-radius: 0;
-  }
+  .computer.full { inset: 0; height: auto; border-radius: 0; }
   .modal { width: calc(100vw - 16px); max-height: 86dvh; }
   .auth { padding: 20px 16px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
   .auth-card { width: 100%; }
