@@ -283,7 +283,10 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
         <header className="roster-head desk-bar">
           <label className="roster-search">
             <span className="search-ico" aria-hidden>
-              ⌕
+              <svg viewBox="0 0 16 16" width="14" height="14">
+                <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M10.5 10.5 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
             </span>
             <input
               value={query}
@@ -384,7 +387,12 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
         <footer className="roster-foot">
           <button className="market-link" onClick={() => setOverlay("market")}>
             <span className="market-ico" aria-hidden>
-              ▦
+              <svg viewBox="0 0 16 16" width="15" height="15">
+                <rect x="2" y="2" width="5" height="5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                <rect x="9" y="2" width="5" height="5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                <rect x="2" y="9" width="5" height="5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                <rect x="9" y="9" width="5" height="5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.4" />
+              </svg>
             </span>
             Marketplace
           </button>
@@ -703,7 +711,7 @@ export function AppShell({ initial }: { initial: Bootstrap }) {
             <button className="send" type="submit" disabled={busy || !draft.trim()} aria-label="Send">
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
                 <path
-                  d="M3 8h9M8 3.5 12.5 8 8 12.5"
+                  d="M3.2 12.8 12.8 3.2M8.2 3.2h4.6v4.6"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.8"

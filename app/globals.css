@@ -64,10 +64,11 @@ button { cursor: pointer; }
   align-items: center;
   gap: 8px;
   width: 100%;
-  background: var(--bg-3);
+  background: #ebebed;
   border-radius: 10px;
   padding: 8px 12px;
 }
+.crew-root.dark .roster-search { background: var(--bg-3); }
 .roster-search input {
   flex: 1;
   border: 0;
@@ -77,7 +78,7 @@ button { cursor: pointer; }
   font-size: 14px;
 }
 .roster-search input::placeholder { color: var(--muted); }
-.search-ico { color: var(--muted); font-size: 14px; }
+.search-ico { color: var(--muted); display: grid; place-items: center; }
 .brand { display: flex; gap: 8px; align-items: center; font-weight: 650; letter-spacing: -0.03em; }
 .brand-mark {
   width: 18px; height: 18px; border-radius: 6px;
@@ -138,7 +139,7 @@ button { cursor: pointer; }
   font-size: 13.5px;
 }
 .market-link:hover, .account-chip:hover { background: var(--bg-3) !important; }
-.market-ico { color: var(--muted); font-size: 15px; }
+.market-ico { color: var(--muted); display: grid; place-items: center; }
 .account-initials {
   width: 28px;
   height: 28px;
@@ -159,7 +160,7 @@ button { cursor: pointer; }
 .head-actions { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
 .menu-btn, .more-btn, .scrim { display: none; }
 .desk-label { font-style: normal; }
-.phone-only { display: none; }
+.phone-only { display: none !important; }
 .plus-wrap { position: relative; }
 .head-plus {
   width: 28px; height: 28px; border: 0;
@@ -599,8 +600,9 @@ button { cursor: pointer; }
     background: transparent; border: 0; font-size: 32px; line-height: 1; color: var(--accent);
   }
   .desk-only, .desk-label, .desk-bar, .scrim { display: none !important; }
-  .phone-only { display: initial; }
-  .head-actions .phone-only { display: flex; }
+  .phone-only { display: initial !important; }
+  .head-actions .phone-only { display: flex !important; }
+  .composer .icon.phone-only { display: grid !important; }
   .ios-home-head {
     display: flex;
     align-items: flex-end;
