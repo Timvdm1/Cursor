@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+.data
+.env
+.env.local
+.netlify
+.open-next
+.wrangler
+.dev.vars
+*.log
+.DS_Store
+coverage
+tsconfig.tsbuildinfo
