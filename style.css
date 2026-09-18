@@ -272,11 +272,17 @@ a:hover {
 .meta-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 22px;
+  align-items: center;
   color: var(--quiet);
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.meta-row span + span::before {
+  content: "·";
+  margin: 0 14px;
+  color: var(--brass);
 }
 
 .docket {

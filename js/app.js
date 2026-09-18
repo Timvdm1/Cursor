@@ -55,9 +55,18 @@ function parseHash() {
 }
 
 function setActiveNav(path) {
+  const key = path.split("/").filter(Boolean)[0] || "";
+  const activeHref = {
+    scan: "#/scan",
+    toetsing: "#/toetsing",
+    dashboard: "#/dashboard",
+    juridisch: "#/juridisch",
+    resultaat: "#/dashboard",
+  }[key] || "#/";
   document.querySelectorAll(".nav a[data-nav]").forEach((link) => {
     const href = link.getAttribute("href") || "";
-    link.classList.toggle("is-active", href === `#${path}` || (path.startsWith("/resultaat") && href === "#/toetsing"));
+    const isHome = (href === "#/" || href === "#") && !key;
+    link.classList.toggle("is-active", href === activeHref || isHome);
   });
 }
 
