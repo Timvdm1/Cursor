@@ -508,6 +508,25 @@ a:hover {
   background: var(--brass-dim);
 }
 
+.sheet .choice {
+  background: #fffdf8;
+  border-color: #d4ccbe;
+}
+
+.sheet .choice span {
+  color: #3e4754;
+}
+
+.sheet .choice strong {
+  color: var(--ink);
+}
+
+.sheet .choice:hover,
+.sheet .choice.is-on {
+  border-color: var(--ink);
+  background: #efe7d6;
+}
+
 .choice input {
   margin-top: 3px;
   accent-color: var(--brass);
