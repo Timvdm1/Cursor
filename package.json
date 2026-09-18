@@ -1,0 +1,11 @@
+{
+  "name": "dba-dossier-ai",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "B2B Micro-SaaS: Deliveroo-toetsing, stoplicht-risicoanalyse en Wet DBA-dossiergenerator voor Nederlandse opdrachtgevers.",
+  "scripts": {
+    "dev": "python3 -m http.server 4173",
+    "test": "node --test tests/scoring.test.js"
+  }
+}
